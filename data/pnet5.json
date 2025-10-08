@@ -1,0 +1,241 @@
+{
+  "id": "pnet5",
+  "titulo": "PNET5 Medulloblastoma (SIOP)",
+  "grupo": "SIOP Europe BTG",
+  "area": "Oncología pediátrica",
+  "versiones": [
+    {
+      "id": "v11-2014",
+      "nombre": "Versión 11 (2014)",
+      "evaluacion": [
+        {
+          "id": "eval1",
+          "momento": "inicial",
+          "descripcion": "RM craneal y espinal, LP (citología), revisión central de imagen y patología; biología central obligatoria (WNT, MYC/MYCN).",
+          "when": { "anchor": "treatment_start" }
+        },
+        {
+          "id": "eval2",
+          "momento": "antes_de_mantenimiento",
+          "descripcion": "RM craneal y espinal para establecer respuesta y punto de partida de quimioterapia de mantenimiento.",
+          "when": { "anchor": "rt_end", "offset_weeks": 0 }
+        },
+        {
+          "id": "eval3a",
+          "momento": "intermedia",
+          "descripcion": "Reevaluación tras 3 cursos de mantenimiento: RM craneal y espinal.",
+          "when": { "anchor": "mtto_cycle_index", "cycle_index": 2 }
+        },
+        {
+          "id": "eval3b",
+          "momento": "intermedia",
+          "descripcion": "Reevaluación tras 6 cursos de mantenimiento: RM craneal y espinal.",
+          "when": { "anchor": "mtto_cycle_index", "cycle_index": 5 }
+        },
+        {
+          "id": "eval4",
+          "momento": "final",
+          "descripcion": "≈6 semanas tras el último curso de mantenimiento: RM craneal.",
+          "when": { "anchor": "treatment_end", "offset_weeks": 6 }
+        }
+      ],
+      "cirugia": {
+        "descripcion": "Resección máxima segura. Criterios de entrada: residual ≤ 1.5 cm²; si 2ª cirugía reduce a ≤1.5 cm² y se mantiene el calendario de RT, elegible.",
+        "when": { "anchor": "treatment_start", "offset_weeks": 0 }
+      },
+      "radioterapia": {
+        "LR": {
+          "semanas": "1–6",
+          "rama": "RT sola",
+          "nota": "CSI 18 Gy (10 fracciones de 1.8 Gy) + boost 36 Gy (20 fracciones) → dosis total primaria 54 Gy (30 fracciones). Sin vincristina durante RT.",
+          "when": { "anchor": "treatment_start", "offset_weeks": 4 },
+          "duracion_semanas": 6
+        },
+        "SR": {
+          "semanas": "1–6",
+          "ramas": [
+            {
+              "id": "rt_sola",
+              "label": "RT sola",
+              "nota": "CSI 23.4 Gy (13 fracciones de 1.8 Gy) + boost 30.6 Gy (17 fracciones) → total 54 Gy. Sin vincristina durante RT.",
+              "when": { "anchor": "treatment_start", "offset_weeks": 4 }
+            },
+            {
+              "id": "rt_carbo",
+              "label": "RT + Carboplatino",
+              "nota": "Carboplatino 35 mg/m² IV 15–60 min, 5 días/sem (lun–vie), 1–4 h antes de RT, durante 6 semanas (30 dosis máx.). Si no hay RT ese día, no administrar carboplatino. Sin vincristina durante RT.",
+              "when": { "anchor": "treatment_start", "offset_weeks": 4 }
+            }
+          ],
+          "when": { "anchor": "treatment_start", "offset_weeks": 4 },
+          "duracion_semanas": 6
+        },
+        "vincristina_durante_rt": false,
+        "ramas_clinicas": [
+          {
+            "id": "lr_rt_sola",
+            "grupo": "LR",
+            "label": "LR · RT sola (CSI 18 Gy + boost 36 Gy)",
+            "elegibilidad": "WNT positivo y <16 años; resección adecuada; sin metástasis",
+            "concomitante": [],
+            "nota": "Sin quimioterapia concomitante. Total 54 Gy."
+          },
+          {
+            "id": "sr_rt_sola",
+            "grupo": "SR",
+            "label": "SR · RT sola (CSI 23.4 Gy + boost 30.6 Gy)",
+            "elegibilidad": "Riesgo estándar clínico; WNT negativo o ≥16 años",
+            "concomitante": [],
+            "nota": "Sin vincristina concomitante. Total 54 Gy.",
+            "randomizacion": "1:1 dentro de SR",
+            "activo": true,
+            "estandar": true
+          },
+          {
+            "id": "sr_rt_carbo",
+            "grupo": "SR",
+            "label": "SR · RT + Carboplatino (35 mg/m² 5d/sem × 6 sem)",
+            "elegibilidad": "Riesgo estándar clínico; WNT negativo o ≥16 años",
+            "concomitante": [
+              { "farmaco": "Carboplatino", "dosis": "35 mg/m²", "frecuencia": "5 días/sem × 6 semanas", "cuando": "1–4 h antes de RT" }
+            ],
+            "nota": "Sin vincristina concomitante. Si no hay RT un día, no se administra carboplatino.",
+            "randomizacion": "1:1 dentro de SR",
+            "activo": true,
+            "opcional": true,
+            "comentario": "Uso variable según centro; más toxicidad hematológica y renal; no mejoró supervivencia global."
+          }
+        ],
+        "toxicidades_tipicas": [
+          "Fatiga, náuseas/vómitos, alopecia",
+          "Mielosupresión (particularmente con CSI)",
+          "Dermatitis / eritema cutáneo en campos de RT",
+          "Ototoxicidad (riesgo con dosis cocleares altas)",
+          "Endocrinopatías tardías (tiroidea/crecimiento) y alteraciones neurocognitivas a largo plazo"
+        ],
+        "modificaciones_hematologicas": {
+          "control": "Hemograma 2×/sem (3×/sem si carboplatino concomitante).",
+          "criterios": {
+            "anemia_leucopenia_trombopenia": "No interrumpir RT salvo riesgo vital.",
+            "transfusiones": "Hb < 10 g/dL o según clínica; plaquetas según clínica o ≤ 25×10^9/L.",
+            "neutropenia": "Si ANC ≤ 0.5×10^9/L considerar G-CSF preferentemente en fines de semana."
+          }
+        },
+        "soporte_rt": {
+          "gcsf": "Si ANC ≤1000/µL el viernes, administrar G-CSF vie-sáb-dom tras la RT del viernes. Si ANC >1000/µL, no administrar.",
+          "observaciones": "Cualquier interrupción debe compensarse según política nacional/institucional."
+        }
+      },
+      "quimioterapia": {
+        "descripcion": "Mantenimiento comienza 6 semanas tras finalizar RT.",
+        "inicio_relativo": { "anchor": "rt_end", "offset_weeks": 6 },
+        "LR": { "ciclos_totales": 6, "orden": ["A","B","A","B","A","B"] },
+        "SR": { "ciclos_totales": 8, "orden": ["A","B","A","B","A","B","A","B"] },
+        "induccion": null,
+        "consolidacion": null,
+        "mantenimiento": null,
+        "reinduccion": null
+      },
+      "investigaciones": {
+        "antes_de_cada_curso": [
+          "Historia, exploración, ECOG/Karnofsky pediátrico",
+          "Hemograma y bioquímica (urea/creatinina, electrolitos, transaminasas, FA, bilirrubina, albúmina, Mg, Ca, fosfato)"
+        ],
+        "antes_de_cursos_alternos": [
+          "Audiometría obligatoria antes de cursos con cisplatino/carboplatino",
+          "GFR estimado antes de cursos con cisplatino"
+        ],
+        "imagen": {
+          "eventos": [
+            {
+              "momento": "antes_mantenimiento",
+              "when": { "anchor": "rt_end" },
+              "pruebas": [
+                { "tipo": "RM", "subtipo": "craneal", "region": "cerebro", "nota": "" },
+                { "tipo": "RM", "subtipo": "espinal", "region": "columna", "nota": "" }
+              ]
+            },
+            {
+              "momento": "tras_3_cursos",
+              "when": { "anchor": "mtto_cycle_index", "cycle_index": 2 },
+              "pruebas": [
+                { "tipo": "RM", "subtipo": "craneal", "region": "cerebro", "nota": "" },
+                { "tipo": "RM", "subtipo": "espinal", "region": "columna", "nota": "" }
+              ]
+            },
+            {
+              "momento": "tras_6_cursos",
+              "when": { "anchor": "mtto_cycle_index", "cycle_index": 5 },
+              "pruebas": [
+                { "tipo": "RM", "subtipo": "craneal", "region": "cerebro", "nota": "" },
+                { "tipo": "RM", "subtipo": "espinal", "region": "columna", "nota": "" }
+              ]
+            },
+            {
+              "momento": "fin_tratamiento",
+              "when": { "anchor": "treatment_end", "offset_weeks": 6 },
+              "pruebas": [
+                { "tipo": "RM", "subtipo": "craneal", "region": "cerebro", "nota": "≈6 semanas tras último curso" }
+              ]
+            }
+          ]
+        },
+        "seguimiento_post": "RM craneal cada 4 meses el 1er año; al menos cada 6 meses el 2º año; y anual hasta 5 años. En sospecha de recaída: RM espinal y considerar citología LCR."
+      },
+      "soporte": {
+        "antiemetico": "Antagonista 5HT3 durante platinos.",
+        "hidratacion": "Hiperhidratación y diuresis forzada con platinos; considerar manitol.",
+        "transfusiones": "Usar hemoderivados irradiados. Hb <10 g/dL: transfundir según práctica; plaquetas ≤25×10^9/L o clínica.",
+        "gcsf_rt": "Algoritmo específico durante RT-con-Carbo (vie-sáb-dom si ANC ≤1000/µL el viernes).",
+        "observaciones": "No ajustar dosis por obesidad o caquexia para cálculo de BSA."
+      },
+      "ramas_y_asignacion": {
+        "LR": { "criterio": "WNT positivo y <16 años", "rt": "RT sola 18 Gy CSI + boost", "mantenimiento": "6 ciclos ABA-BAB (A=platino/CCNU/VCR; B=CPA/VCR)" },
+        "SR": {
+          "criterio": "WNT negativo (o WNT ≥16 años) y estándar clínico",
+          "randomizacion": {
+            "tipo": "1:1",
+            "opciones_rt": ["sr_rt_sola", "sr_rt_carbo"]
+          },
+          "rt": "23.4 Gy CSI + boost; rama 'RT sola' o 'RT + Carboplatino' según randomización",
+          "mantenimiento": "8 ciclos ABA-BAB-AB"
+        }
+      },
+      "mantenimiento": {
+        "orden": ["A", "B", "A", "B", "A", "B"],
+        "ciclos": {
+          "A": {
+            "farmacos": [
+              "Cisplatino 70 mg/m² d1",
+              "CCNU 75 mg/m² d1",
+              "Vincristina 1.5 mg/m² d1,8,15"
+            ],
+            "vcr": "3 dosis",
+            "toxicidades": [
+              "Cisplatino: nefrotoxicidad, ototoxicidad, náuseas/vómitos intensas, hipomagnesemia",
+              "CCNU: mielosupresión tardía, hepatotoxicidad",
+              "Vincristina: neuropatía periférica, estreñimiento/íleo"
+            ]
+          },
+          "B": {
+            "farmacos": [
+              "Ciclofosfamida 1000 mg/m²/d d1-2",
+              "Vincristina 1.5 mg/m² d1"
+            ],
+            "vcr": "1 dosis",
+            "toxicidades": [
+              "Ciclofosfamida: mielosupresión, cistitis hemorrágica (usar MESNA), SIADH",
+              "Vincristina: neuropatía periférica/autonómica"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "amend-pres",
+      "nombre": "Enmienda (cambio AB→BA por PRES)",
+      "descripcion": "Cambio del orden de mantenimiento de ABABAB a BABABA por aumento de PRES tras el primer A.",
+      "mantenimiento": { "orden": ["B","A","B","A","B","A"] }
+    }
+  ]
+}
