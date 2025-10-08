@@ -6,3 +6,10 @@ dist/
 *.log
 .env*
 .DS_Store
+node_modules/
+.next/
+out/
+dist/
+*.log
+.env*
+.DS_Store
