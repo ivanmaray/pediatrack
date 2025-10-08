@@ -1,1 +1,8 @@
 node_modules
+node_modules/
+.next/
+out/
+dist/
+*.log
+.env*
+.DS_Store
