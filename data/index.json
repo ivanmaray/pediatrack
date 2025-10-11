@@ -1,3 +1,16 @@
 [
-  { "id": "pnet5", "nombre": "PNET5 Medulloblastoma", "grupo": "SIOP" }
+  {
+    "id": "pnet5",
+    "nombre": "PNET5 Medulloblastoma",
+    "grupo": "SIOP",
+    "titulo": "PNET5 Medulloblastoma (SIOP)",
+    "area": "Meduloblastoma"
+  },
+  {
+    "id": "hrnbl",
+    "nombre": "Neuroblastoma Alto Riesgo",
+    "grupo": "SIOPEN",
+    "titulo": "Neuroblastoma de Alto Riesgo (SIOPEN)",
+    "area": "Neuroblastoma"
+  }
 ]

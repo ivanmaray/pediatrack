@@ -7,6 +7,11 @@
     {
       "id": "v11-2014",
       "nombre": "Versión 11 (2014)",
+      "estratificacion": [
+        { "id": "lr", "label": "Bajo riesgo (LR)", "default": true },
+        { "id": "sr_rt_sola", "label": "Riesgo estándar · RT sola" },
+        { "id": "sr_rt_carbo", "label": "Riesgo estándar · RT + Carboplatino" }
+      ],
       "evaluacion": [
         {
           "id": "eval1",
@@ -44,6 +49,26 @@
         "when": { "anchor": "treatment_start", "offset_weeks": 0 }
       },
       "radioterapia": {
+        "opciones": [
+          {
+            "id": "lr",
+            "when": { "anchor": "treatment_start", "offset_weeks": 4 },
+            "duracion_semanas": 6,
+            "nota": "CSI 18 Gy (10 fracciones de 1.8 Gy) + boost 36 Gy (20 fracciones) → dosis total 54 Gy. Sin vincristina durante RT."
+          },
+          {
+            "id": "sr_rt_sola",
+            "when": { "anchor": "treatment_start", "offset_weeks": 4 },
+            "duracion_semanas": 6,
+            "nota": "CSI 23.4 Gy (13 fracciones de 1.8 Gy) + boost 30.6 Gy (17 fracciones) → total 54 Gy. Sin vincristina durante RT."
+          },
+          {
+            "id": "sr_rt_carbo",
+            "when": { "anchor": "treatment_start", "offset_weeks": 4 },
+            "duracion_semanas": 6,
+            "nota": "RT + Carboplatino 35 mg/m² 5d/sem ×6; no administrar carboplatino si no hay RT ese día."
+          }
+        ],
         "LR": {
           "semanas": "1–6",
           "rama": "RT sola",
@@ -129,6 +154,10 @@
       "quimioterapia": {
         "descripcion": "Mantenimiento comienza 6 semanas tras finalizar RT.",
         "inicio_relativo": { "anchor": "rt_end", "offset_weeks": 6 },
+        "planes": {
+          "lr": { "orden": ["A","B","A","B","A","B"] },
+          "sr": { "orden": ["A","B","A","B","A","B","A","B"] }
+        },
         "LR": { "ciclos_totales": 6, "orden": ["A","B","A","B","A","B"] },
         "SR": { "ciclos_totales": 8, "orden": ["A","B","A","B","A","B","A","B"] },
         "induccion": null,
