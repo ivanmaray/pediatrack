@@ -161,10 +161,10 @@ const styleFor = (kind, wide = false, pxRef = 40) => {
  *            inmunoterapia, trasplante, profilaxis, soporte, seguimiento
  * - Mantiene compatibilidad con el campo histórico "mantenimiento" (A/B) si existe.
  */
-export default function ProtocolMap({ data, showHeader = true, showLegend = true }) {
-  const [pxPerWeek, setPxPerWeek] = useState(40);
+export default function ProtocolMap({ data, showHeader = true, showLegend = true, selectedStratId }) {
+  const [pxPerWeek, setPxPerWeek] = useState(60);
   useEffect(() => {
-    const onResize = () => setPxPerWeek(typeof window !== 'undefined' && window.innerWidth < 768 ? 28 : 40);
+    const onResize = () => setPxPerWeek(typeof window !== 'undefined' && window.innerWidth < 768 ? 40 : 60);
     onResize();
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
@@ -174,7 +174,15 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
   const hasLR = !!((data.versiones?.[0]?.radioterapia?.LR) || (data.versiones?.find(Boolean)?.radioterapia?.LR));
   const hasSR = !!((data.versiones?.[0]?.radioterapia?.SR) || (data.versiones?.find(Boolean)?.radioterapia?.SR));
   // rtMode: "LR" | "SR_sola" | "SR_carbo" | "ALL"
-  const [rtMode, setRtMode] = useState(hasSR ? "SR_sola" : "LR");
+  const defaultRtMode = hasSR ? "SR_sola" : "LR";
+  const [rtMode, setRtMode] = useState(selectedStratId ? (selectedStratId === 'lr' ? 'LR' : selectedStratId === 'sr_rt_sola' ? 'SR_sola' : selectedStratId === 'sr_rt_carbo' ? 'SR_carbo' : defaultRtMode) : defaultRtMode);
+
+  useEffect(() => {
+    if (selectedStratId) {
+      const newMode = selectedStratId === 'lr' ? 'LR' : selectedStratId === 'sr_rt_sola' ? 'SR_sola' : selectedStratId === 'sr_rt_carbo' ? 'SR_carbo' : defaultRtMode;
+      setRtMode(newMode);
+    }
+  }, [selectedStratId, defaultRtMode]);
   const [detail, setDetail] = useState(null); // { title, subt, items[] }
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const base = data.versiones[0];
@@ -529,93 +537,196 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
       });
     }
 
-    /** Quimioterapia: subfases estándar */
-    const addQSub = (sub, key, title, kind) => {
-      if (!sub) return null;
-      const id = `q-${key}`;
+    // 1) Ciclos individuales de inducción RAPID COJEC si existen
+    if (qtx?.induccion && Array.isArray(qtx.induccion) && qtx.induccion.length > 0) {
+      qtx.induccion.forEach((ciclo, idx) => {
+        const id = `q-induccion-${idx}`;
+        const wk = resolveWhenWeek(ciclo.when);
+        const posX = wk != null ? weekToX(wk) : x;
+        const label = mkLabel(
+          ciclo.titulo || "RAPID COJEC",
+          ciclo.descripcion || "",
+          Array.isArray(ciclo.drogas) ? `Medicación:\n${ciclo.drogas.filter(d => d.nombre).map(d => `- ${d.nombre}: ${d.dosis}`).join('\n')}` : ""
+        );
+        pushNode({ id, yKey: "quimioterapia", kind: "q_induccion", label, wide: true, posX });
+        if (idx === 0 && lastId) link(lastId, id); // Primer ciclo
+        else if (idx > 0) link(`q-induccion-${idx - 1}`, id); // Entre ciclos consecutivos
+        lastId = id;
+        x = Math.max(x, posX) + 190;
+      });
+    } else if (qtx?.induccion) {
+      // Fallback si no es array
+      const wk = resolveWhenWeek({ anchor: "treatment_start", offset_weeks: 0 });
+      const targetX = wk != null ? weekToX(wk) : x;
       const label = mkLabel(
-        `Quimioterapia · ${title}`,
-        sub.duracion ? `Duración: ${sub.duracion}` : "",
-        sub.modalidad ? `Modalidad: ${sub.modalidad}` : "",
-        Array.isArray(sub.farmacos) ? `Fármacos: ${sub.farmacos.join(", ")}` : "",
-        Array.isArray(sub.ciclos) ? `Ciclos: ${sub.ciclos.map((c) => c.id || "").filter(Boolean).join(", ")}` : ""
+        `Quimioterapia · Inducción`,
+        qtx.induccion.duracion ? `Duración: ${qtx.induccion.duracion}` : "",
+        Array.isArray(qtx.induccion.farmacos) ? `Fármacos: ${qtx.induccion.farmacos.join(", ")}` : ""
       );
-      pushNode({ id, yKey: "quimioterapia", kind, label, wide: true });
+      pushNode({ id: "q-induccion", yKey: "quimioterapia", kind: "q_induccion", label, wide: true, posX: targetX });
+      if (lastId) link(lastId, "q-induccion");
+      lastId = "q-induccion";
+      x = Math.max(x, targetX) + 190;
+    }
+
+    // 2) Consolidación (en semana 16-17, antes del trasplante en semana 20)
+    if (qtx?.consolidacion) {
+      const id = `q-consolidacion`;
+      const wk = resolveWhenWeek({ anchor: "induction_cycle_index", cycle_index: 7 });
+      const targetX = wk != null ? weekToX(wk) : x;
+      const label = Array.isArray(qtx.consolidacion) ?
+        mkLabel(
+          `Consolidación`,
+          qtx.consolidacion[0]?.titulo || "",
+          qtx.consolidacion[0]?.drogas?.filter(d => d.nombre).map(d => `- ${d.nombre}: ${d.dosis || ""}`).join('\n') || "",
+          qtx.consolidacion[0]?.descripcion || ""
+        ) :
+        mkLabel(
+          `Consolidación`,
+          qtx.consolidacion.duracion ? `Duración: ${qtx.consolidacion.duracion}` : "",
+          Array.isArray(qtx.consolidacion.farmacos) ? `Fármacos: ${qtx.consolidacion.farmacos.join(", ")}` : ""
+        );
+      pushNode({ id, yKey: "quimioterapia", kind: "q_consolidacion", label, wide: true, posX: targetX });
+      if (lastId) link(lastId, id);
+      lastId = id;
+      x = Math.max(x, targetX) + 190;
+    }
+
+    // 3) Mantenimiento si existe
+    if (qtx?.mantenimiento) {
+      const mttoStartWeeks = Array.isArray(mttoOrden) && mttoOrden.length ? mttoStartOffset : 26;
+      const id = `q-mantenimiento`;
+      const wk = resolveWhenWeek({ anchor: "treatment_start", offset_weeks: mttoStartWeeks });
+      const targetX = wk != null ? weekToX(wk) : x;
+      const label = mkLabel(
+        `Mantenimiento`,
+        qtx.mantenimiento.duracion ? `Duración: ${qtx.mantenimiento.duracion}` : "",
+        Array.isArray(qtx.mantenimiento.farmacos) ? `Fármacos: ${qtx.mantenimiento.farmacos.join(", ")}` : ""
+      );
+      pushNode({ id, yKey: "quimioterapia", kind: "q_mantenimiento", label, wide: true, posX: targetX });
+      if (lastId) link(lastId, id);
+      lastId = id;
+      x = Math.max(x, targetX) + 190;
+    }
+
+    // 4) Reinducción si existe
+    if (qtx?.reinduccion) {
+      const id = `q-reinduccion`;
+      const label = mkLabel(
+        `Reinducción/Rescate`,
+        qtx.reinduccion.duracion ? `Duración: ${qtx.reinduccion.duracion}` : "",
+        Array.isArray(qtx.reinduccion.farmacos) ? `Fármacos: ${qtx.reinduccion.farmacos.join(", ")}` : ""
+      );
+      pushNode({ id, yKey: "quimioterapia", kind: "q_reinduccion", label, wide: true });
       if (lastId) link(lastId, id);
       lastId = id;
       x += 190;
-      return id;
-    };
-
-    // 1) Subfases estructuradas si existen
-    if (qtx) {
-      addQSub(qtx.induccion, "induccion", "Inducción", "q_induccion");
-      addQSub(qtx.consolidacion, "consolidacion", "Consolidación", "q_consolidacion");
-      if (qtx.mantenimiento) {
-        addQSub(qtx.mantenimiento, "mantenimiento", "Mantenimiento", "q_mantenimiento");
-      }
-      addQSub(qtx.reinduccion, "reinduccion", "Reinducción/Rescate", "q_reinduccion");
     }
 
-    // 2) Ciclos A/B basados en mttoOrden calculado (respeta LR/SR/planes)
+    // 2) Línea temporal de mantenimiento A/B conectada en secuencia
     if (Array.isArray(mttoOrden) && mttoOrden.length) {
       const ord = mttoOrden;
       const ciclosDef = (version.mantenimiento?.ciclos || base.mantenimiento?.ciclos || {});
-      ord.forEach((c, i) => {
+      for (let i = 0; i < ord.length; i++) {
+        const c = ord[i];
         const isA = c === "A";
         const reg = isA ? ciclosDef?.A : ciclosDef?.B;
-        // Calcular inicio del ciclo por semanas reales
         const startWeek = mttoStartOffset + sumCyclesUntil(ord, mttoDur, i - 1);
         const duration = isA ? mttoDur.A : mttoDur.B;
         const posX = weekToX(startWeek);
+        const endWeek = startWeek + duration;
         const id = `mtto-${i}`;
+        const label = mkLabel(
+          `Semana de inicio: S${startWeek}`,
+          `Mantenimiento · Ciclo ${c}`,
+          reg?.vcr || "",
+          ...(Array.isArray(reg?.farmacos) ? reg.farmacos : [])
+        );
         pushNode({
           id,
           yKey: "quimioterapia",
           kind: "q_mantenimiento",
-          label: mkLabel(
-            `Semana de inicio: S${startWeek}`,
-            `Mantenimiento · Ciclo ${c}`,
-            reg?.vcr || "",
-            ...(Array.isArray(reg?.farmacos) ? reg.farmacos : [])
-          ),
+          label,
           wide: true,
           posX,
           duration,
-          // meta para onClick
           meta: { ciclo: c, regimen: reg || {} }
         });
-        if (lastId) link(lastId, id);
-        lastId = id;
-        // Evaluaciones intermedias: si traen when, respetar su posición exacta
-        if (evalIntermedia.length) {
-          const pending = [...evalIntermedia];
-          for (let k = 0; k < pending.length; k++) {
-            const evInt = pending[k];
-            const wk = resolveWhenWeek(evInt.when);
-            if (wk != null) {
-              const posXEval = weekToX(wk);
-              pushNode({
-                id: `eval-intermedia-${k}`,
-                yKey: "evaluacion",
-                kind: "evaluacion",
-                label: evalLabel(evInt),
-                wide: true,
-                posX: posXEval
-              });
-              if (lastId) link(lastId, `eval-intermedia-${k}`);
-              lastId = `eval-intermedia-${k}`;
-              x = Math.max(x, posXEval) + 190;
-            }
-          }
-          // Limpiar para no duplicar
-          evalIntermedia.length = 0;
+        // Conectar el primero al último id (RT o evaluación)
+        if (i === 0 && lastId) link(lastId, id);
+        // Entre ciclos consecutivos
+        if (i > 0) {
+          const prevId = `mtto-${i - 1}`;
+          link(prevId, id);
         }
-        // x += 190; // eliminado: ya no se mueve x aquí
-      });
+        lastId = id;
+      }
     }
 
-    /** Inmunoterapia, Trasplante, Profilaxis, Soporte, Seguimiento */
+    // Trasplante justo después de quimioterapia
+    if (txp) {
+      const id = `txp-0`;
+      const wk = resolveWhenWeek(txp.when);
+      const targetX = wk != null ? weekToX(wk) : x;
+      pushNode({
+        id,
+        yKey: "trasplante",
+        kind: "trasplante",
+        label: mkLabel(
+          "Trasplante / Altas dosis",
+          txp.descripcion || "",
+          txp.via ? `Vía: ${txp.via}` : "",
+          txp.condicionamiento ? `Acond.: ${Array.isArray(txp.condicionamiento) ? txp.condicionamiento.join(", ") : txp.condicionamiento}` : "",
+          txp.detalles ? txp.detalles.join(", ") : ""
+        ),
+      });
+      if (lastId) link(lastId, id);
+      lastId = id;
+      x = Math.max(x, targetX) + 190;
+    }
+
+    // Inmunoterapia: ciclos individuales conectados en secuencia
+    if (inmuno?.eventos && Array.isArray(inmuno.eventos) && inmuno.eventos.length > 0) {
+      inmuno.eventos.forEach((ciclo, idx) => {
+        const id = `inmuno-${idx}`;
+        const wk = resolveWhenWeek(ciclo.when);
+        const targetX = wk != null ? weekToX(wk) : x;
+        pushNode({
+          id,
+          yKey: "inmunoterapia",
+          kind: "inmunoterapia",
+          label: mkLabel(
+            ciclo.titulo || "Inmunoterapia",
+            ciclo.descripcion || ""
+          ),
+          wide: true,
+        });
+        if (idx === 0 && lastId) link(lastId, id); // Conectar primer ciclo al trasplante
+        else if (idx > 0) link(`inmuno-${idx - 1}`, id); // Entre ciclos consecutivos
+        lastId = id;
+        x = Math.max(x, targetX) + 190;
+      });
+    } else if (inmuno) {
+      // Fallback si no tiene eventos
+      const id = `inmuno-0`;
+      pushNode({
+        id,
+        yKey: "inmunoterapia",
+        kind: "inmunoterapia",
+        label: mkLabel(
+          "Inmunoterapia / Biológicos",
+          inmuno.descripcion || "",
+          inmuno.via ? `Vía: ${inmuno.via}` : "",
+          Array.isArray(inmuno.farmacos) ? `Fármacos: ${inmuno.farmacos.join(", ")}` : "",
+          Array.isArray(inmuno.antiinfecciosa) ? `Anti-infecciosa: ${inmuno.antiinfecciosa.join(", ")}` : ""
+        ),
+      });
+      if (lastId) link(lastId, id);
+      lastId = id;
+      x += 190;
+    }
+
+    // Luego los demás tratamientos
     const addSimple = (obj, key, title, kind, laneKey) => {
       if (!obj) return;
       const id = `${key}-0`;
@@ -636,11 +747,49 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
       lastId = id;
       x += 190;
     };
-    addSimple(inmuno, "inmuno", "Inmunoterapia / Biológicos", "inmunoterapia", "inmunoterapia");
-    addSimple(txp, "txp", "Trasplante / Altas dosis", "trasplante", "trasplante");
     addSimple(prof, "profilaxis", "Profilaxis / Intratecal / Sistémica", "profilaxis", "profilaxis");
     addSimple(soporte, "soporte", "Soporte / Cuidados", "soporte", "soporte");
-    addSimple(seg, "seguimiento", "Seguimiento", "seguimiento", "seguimiento");
+
+    // Seguimiento: fases individuales conectadas en secuencia
+    if (seg?.eventos && Array.isArray(seg.eventos) && seg.eventos.length > 0) {
+      seg.eventos.forEach((fase, idx) => {
+        const id = `seguimiento-${idx}`;
+        const wk = resolveWhenWeek(fase.when);
+        const targetX = wk != null ? weekToX(wk) : x;
+        pushNode({
+          id,
+          yKey: "seguimiento",
+          kind: "seguimiento",
+          label: mkLabel(
+            fase.titulo || "Seguimiento",
+            fase.descripcion || ""
+          ),
+          wide: true,
+        });
+        if (idx === 0 && lastId) link(lastId, id); // Conectar primer fase al último anterior
+        else if (idx > 0) link(`seguimiento-${idx - 1}`, id); // Entre fases consecutivas
+        lastId = id;
+        x = Math.max(x, targetX) + 190;
+      });
+    } else if (seg) {
+      // Fallback si no tiene eventos
+      const id = `seguimiento-0`;
+      pushNode({
+        id,
+        yKey: "seguimiento",
+        kind: "seguimiento",
+        label: mkLabel(
+          "Seguimiento",
+          seg.descripcion || "",
+          seg.via ? `Vía: ${seg.via}` : "",
+          Array.isArray(seg.farmacos) ? `Fármacos: ${seg.farmacos.join(", ")}` : "",
+          Array.isArray(seg.antiinfecciosa) ? `Anti-infecciosa: ${seg.antiinfecciosa.join(", ")}` : ""
+        ),
+      });
+      if (lastId) link(lastId, id);
+      lastId = id;
+      x += 190;
+    }
 
     /** Evaluación final (al cierre del tratamiento) */
     if (evalFinal.length) {
@@ -1000,11 +1149,29 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
             // Ordenar semanas y crear marcas
             weeksToShow.sort((a, b) => a - b).forEach(w => {
               const left = screenX(w);
+              // Hacer las líneas más gruesas cuando el zoom es alto para mayor visibilidad
+              const lineWidth = zoom > 2 ? Math.min(zoom * 0.5, 3) : 1;
               marks.push(
-                <div key={`ruler-${w}`} style={{ position: "absolute", left, top: 6, height: 14, width: 1, background: THEME.gridStrong }} />
+                <div key={`ruler-${w}`} style={{
+                  position: "absolute",
+                  left,
+                  top: 6,
+                  height: 14,
+                  width: lineWidth,
+                  background: THEME.gridStrong,
+                  borderRadius: lineWidth > 1 ? `${lineWidth/2}px` : '0'
+                }} />
               );
               marks.push(
-                <div key={`ruler-label-${w}`} style={{ position: "absolute", left: left + 4, top: 16, fontSize: 11, color: THEME.textMuted, fontWeight: 500 }}>
+                <div key={`ruler-label-${w}`} style={{
+                  position: "absolute",
+                  left: left + 4 + (lineWidth > 1 ? lineWidth : 0),
+                  top: 16,
+                  fontSize: 11,
+                  color: THEME.textMuted,
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap'
+                }}>
                   {`S${w}`}
                 </div>
               );
@@ -1018,8 +1185,6 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        fitView
-        fitViewOptions={{ padding: 0.08 }}
         onMove={(_, vp) => setViewport(vp)}
         nodesDraggable={false}
         nodesConnectable={false}

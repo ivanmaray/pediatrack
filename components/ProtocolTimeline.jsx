@@ -1,6 +1,24 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+
+// Color mapping for lanes
+const COLORS = {
+  evaluacion: "#7b95b4",
+  imagen: "#6b7ba6",
+  cirugia: "#4f5963",
+  radioterapia: "#223e82",
+  quimioterapia: "#6e48c7",
+  q_induccion: "#5e3dbc",
+  q_consolidacion: "#5534b0",
+  q_mantenimiento: "#4b2ea3",
+  q_reinduccion: "#432796",
+  inmunoterapia: "#1a7b62",
+  trasplante: "#b7542f",
+  profilaxis: "#106f7c",
+  soporte: "#7a6517",
+  seguimiento: "#466d92"
+};
 
 const titleCase = (str) =>
   (str || "")
@@ -97,14 +115,16 @@ const findDefaultStrat = (version, fallbackVersion) => {
   return strat.find((s) => s?.default) || strat[0] || null;
 };
 
-const createTimelineContext = (protocolo, version) => {
+const createTimelineContext = (protocolo, version, selectedStratId) => {
   const baseVersion = Array.isArray(protocolo.versiones) ? protocolo.versiones[0] || {} : {};
   const radioterapia = version.radioterapia ?? baseVersion.radioterapia ?? protocolo.radioterapia ?? {};
   const quimio = version.quimioterapia ?? baseVersion.quimioterapia ?? protocolo.quimioterapia ?? {};
   const legacyMtto = version.mantenimiento ?? baseVersion.mantenimiento ?? protocolo.mantenimiento ?? {};
 
-  const defaultStrat = findDefaultStrat(version, baseVersion);
-  const rtMode = normalizeRtMode(defaultStrat?.id);
+  const estratificacion = Array.isArray(version?.estratificacion) ? version.estratificacion : [];
+  const selectedStrat = estratificacion.find(s => s.id === selectedStratId);
+  const effectiveStrat = selectedStrat || findDefaultStrat(version, baseVersion);
+  const rtMode = normalizeRtMode(effectiveStrat?.id);
 
   const options = Array.isArray(radioterapia?.opciones) ? radioterapia.opciones : [];
   const optionMap = Object.fromEntries(options.map((opt) => [normalizeRtMode(opt.id), opt]));
@@ -291,6 +311,9 @@ const createTimelineContext = (protocolo, version) => {
     durationFor,
     quimio,
     legacyMtto,
+    rtMode,
+    rtStartWeek,
+    rtSpan,
   };
 };
 
@@ -340,6 +363,7 @@ const normalizeItems = (arr) => (Array.isArray(arr) ? arr.filter(Boolean) : []);
 const PHASE_LANE_LABELS = {
   evaluacion: "Evaluaciones",
   cirugia: "Cirugía",
+  quimioterapia: "Quimioterapia",
   radioterapia: "Radioterapia",
   inmunoterapia: "Inmunoterapia",
   profilaxis: "Soporte / Profilaxis",
@@ -443,7 +467,7 @@ const buildQuimioPhases = (quimio = {}, context, createItem) => {
   return phases;
 };
 
-const buildPhaseSet = (version, protocolo, context) => {
+const buildPhaseSet = (version, protocolo, context, selectedStratId) => {
   const phases = [];
   let order = 0;
 
@@ -458,13 +482,20 @@ const buildPhaseSet = (version, protocolo, context) => {
   const createItem = (lane, raw = {}) => {
     const currentOrder = order++;
     const details = getWhenDetails(raw.when, raw.whenLabel);
+    let week = (raw.week ?? details.week);
+    const span = (raw.span ?? details.span);
+    const { whenLabel, anchor } = details;
+    // For soporte items, set week to null so they appear at sequence end in timeline flow, only in lanes
+    if (lane === PHASE_LANE_LABELS.soporte) {
+      week = null;
+    }
     return {
       ...raw,
       order: currentOrder,
-      week: details.week,
-      whenLabel: details.whenLabel,
-      span: details.span,
-      anchor: details.anchor,
+      week,
+      whenLabel,
+      span,
+      anchor,
       lane,
     };
   };
@@ -520,36 +551,91 @@ const buildPhaseSet = (version, protocolo, context) => {
   if (version.radioterapia || protocolo.radioterapia) {
     const rt = version.radioterapia || protocolo.radioterapia;
     const opciones = normalizeItems(rt.opciones);
+    const rtMode = context.rtMode;
     const detail =
       opciones.length > 0
-        ? opciones.map((opt) =>
-            createItem(PHASE_LANE_LABELS.radioterapia, {
-              title: opt.label || titleCase(opt.id) || "Rama",
-              when: opt.when,
-              body: opt.nota || opt.descripcion,
-              meta: opt.dosis || opt.dosis_total,
+        ? opciones
+            .filter((opt) => opt.id === selectedStratId || normalizeRtMode(opt.id) === rtMode)
+            .map((opt) => {
+              const rtStartWeek = context.resolveWhenWeek(opt.when) || 4;
+              const rtSpan = opt.duracion_semanas || 6;
+              return createItem(PHASE_LANE_LABELS.radioterapia, {
+                title: opt.label || titleCase(opt.id) || "Rama",
+                when: opt.when,
+                body: opt.nota || opt.descripcion,
+                meta: opt.dosis || opt.dosis_total,
+                week: rtStartWeek,
+                span: {
+                  startWeek: rtStartWeek,
+                  endWeek: rtStartWeek + rtSpan
+                }
+              });
             })
-          )
         : ["LR", "SR"]
             .map((key) => {
               const rama = rt[key];
               if (!rama) return null;
+
+              // Mostrar solo la rama activa según el modo de RT
+              if (!(
+                (key === "LR" && context.rtMode === "LR") ||
+                (key === "SR" && String(context.rtMode || "").startsWith("SR"))
+              )) {
+                return null;
+              }
+
+              // Semana de inicio y duración (en semanas)
+              const start = context.resolveWhenWeek(rama.when || rama.semanas) ?? (context.rtStartWeek ?? 4);
+              const spanWeeks =
+                typeof rama?.duracion_semanas === "number"
+                  ? rama.duracion_semanas
+                  : (parseWeeksRange(rama?.semanas)?.span || context.rtSpan || 6);
+
               return createItem(PHASE_LANE_LABELS.radioterapia, {
                 title: `Rama ${key}`,
                 when: rama.when || rama.semanas,
                 body: rama.nota || rama.descripcion,
                 meta: rama.dosis_total || rama.dosis || rama.rama,
+                week: start,
+                span: {
+                  startWeek: start,
+                  endWeek: start + spanWeeks
+                }
               });
             })
             .filter(Boolean);
 
-    pushPhase({
-      id: "radioterapia",
-      lane: PHASE_LANE_LABELS.radioterapia,
-      title: "Radioterapia",
-      badge: `${detail.length} escenario${detail.length === 1 ? "" : "s"}`,
-      items: detail,
-    });
+    if (detail.length > 0) {
+      pushPhase({
+        id: "radioterapia",
+        lane: PHASE_LANE_LABELS.radioterapia,
+        title: "Radioterapia",
+        badge: `${detail.length} escenario${detail.length === 1 ? "" : "s"}`,
+        items: detail,
+      });
+    }
+
+    // Añadir carboplatino concomitante en quimioterapia cuando RT + Carbo para PNET5
+    if (selectedStratId === "sr_rt_carbo") {
+      pushPhase({
+        id: "quimio-rt-carbo-pnet5",
+        lane: "Quimioterapia",
+        title: "Carboplatino concomitante",
+        badge: "PNET5 estrategia SR",
+        items: [
+          createItem("Quimioterapia", {
+            title: "Carboplatino",
+            when: { anchor: "treatment_start", offset_weeks: 4 },
+            meta: "35 mg/m² 5d/sem ×6",
+            body: "Carboplatino IV 15–30 min, 5 días/sem (lun–vie), 1–4 h antes de RT, durante las 6 semanas de RT. Máx 30 dosis. Suspender si no hay RT ese día.",
+            span: {
+              startWeek: 4,
+              endWeek: 11
+            }
+          })
+        ]
+      });
+    }
   }
 
   buildQuimioPhases(context.quimio, context, createItem).forEach((phase) => pushPhase(phase));
@@ -571,7 +657,7 @@ const buildPhaseSet = (version, protocolo, context) => {
                 body: item.descripcion || item.articulacion,
                 meta: item.tipo || null,
                 whenLabel: item.cuando || null,
-                when: item.when,
+                when: item.when || { anchor: "treatment_span" },
               })
             )
           : [
@@ -584,36 +670,122 @@ const buildPhaseSet = (version, protocolo, context) => {
     });
   }
 
-  ["profilaxis", "inmunoterapia", "trasplante", "seguimiento"].forEach((key) => {
-    const block = version[key] || protocolo[key];
-    if (!block) return;
-    const eventos = normalizeItems(block.eventos || block.ciclos || block.fases || block.items);
-    const laneLabel = key === "profilaxis" ? PHASE_LANE_LABELS.profilaxis : inferLaneFromPhaseId(key);
+  const trasplanteBlock = version.trasplante || protocolo.trasplante;
+  if (trasplanteBlock) {
+    const eventos = normalizeItems(trasplanteBlock.eventos || trasplanteBlock.ciclos || trasplanteBlock.fases || trasplanteBlock.items);
+    const laneLabel = PHASE_LANE_LABELS.trasplante;
     pushPhase({
-      id: key,
+      id: "trasplante",
       lane: laneLabel,
-      title: titleCase(key),
+      title: trasplanteBlock.titulo || titleCase("trasplante"),
       badge: `${eventos.length || 1} paso${eventos.length === 1 ? "" : "s"}`,
-      note: block.descripcion || block.objetivo,
+      note: trasplanteBlock.descripcion || trasplanteBlock.objetivo,
       items:
         eventos.length > 0
           ? eventos.map((item, idx) =>
               createItem(laneLabel, {
-                title: item.titulo || item.nombre || `${titleCase(key)} ${idx + 1}`,
+                title: item.titulo || item.nombre || `${titleCase("trasplante")} ${idx + 1}`,
                 when: item.when,
                 body: item.descripcion || item.detalle,
                 detalles: normalizeItems(item.componentes || item.tratamientos)?.map((t) => t.titulo || t),
               })
             )
-          : [
+          : trasplanteBlock.detalles ?
+            [
               createItem(laneLabel, {
-                title: block.titulo || titleCase(key),
-                body: block.descripcion || block.objetivo,
-                when: block.when,
+                title: trasplanteBlock.titulo || titleCase("trasplante"),
+                body: trasplanteBlock.descripcion || trasplanteBlock.objetivo,
+                when: trasplanteBlock.when,
+                detalles: trasplanteBlock.detalles,
+              }),
+            ]
+            : [
+              createItem(laneLabel, {
+                title: trasplanteBlock.titulo || titleCase("trasplante"),
+                body: trasplanteBlock.descripcion || trasplanteBlock.objetivo,
+                when: trasplanteBlock.when,
               }),
             ],
     });
-  });
+  }
+
+  const inmunoterapiaBlock = version.inmunoterapia || protocolo.inmunoterapia;
+  if (inmunoterapiaBlock) {
+    const eventos = normalizeItems(inmunoterapiaBlock.eventos || inmunoterapiaBlock.ciclos || inmunoterapiaBlock.fases || inmunoterapiaBlock.items);
+    const laneLabel = PHASE_LANE_LABELS.inmunoterapia;
+    pushPhase({
+      id: "inmunoterapia",
+      lane: laneLabel,
+      title: inmunoterapiaBlock.titulo || titleCase("inmunoterapia"),
+      badge: `${eventos.length || 1} paso${eventos.length === 1 ? "" : "s"}`,
+      note: inmunoterapiaBlock.descripcion || inmunoterapiaBlock.objetivo,
+      items:
+        eventos.length > 0
+          ? eventos.map((item, idx) =>
+              createItem(laneLabel, {
+                title: item.titulo || item.nombre || `${titleCase("inmunoterapia")} ${idx + 1}`,
+                when: item.when,
+                body: item.descripcion || item.detalle,
+                detalles: normalizeItems(item.componentes || item.tratamientos)?.map((t) => t.titulo || t),
+              })
+            )
+          : inmunoterapiaBlock.detalles ?
+            [
+              createItem(laneLabel, {
+                title: inmunoterapiaBlock.titulo || titleCase("inmunoterapia"),
+                body: inmunoterapiaBlock.descripcion || inmunoterapiaBlock.objetivo,
+                when: inmunoterapiaBlock.when,
+                detalles: inmunoterapiaBlock.detalles,
+              }),
+            ]
+            : [
+              createItem(laneLabel, {
+                title: inmunoterapiaBlock.titulo || titleCase("inmunoterapia"),
+                body: inmunoterapiaBlock.descripcion || inmunoterapiaBlock.objetivo,
+                when: inmunoterapiaBlock.when,
+              }),
+            ],
+    });
+  }
+
+  const seguimientoBlock = version.seguimiento || protocolo.seguimiento;
+  if (seguimientoBlock) {
+    const eventos = normalizeItems(seguimientoBlock.eventos || seguimientoBlock.ciclos || seguimientoBlock.fases || seguimientoBlock.items);
+    const laneLabel = PHASE_LANE_LABELS.seguimiento;
+    pushPhase({
+      id: "seguimiento",
+      lane: laneLabel,
+      title: seguimientoBlock.titulo || titleCase("seguimiento"),
+      badge: `${eventos.length || 1} paso${eventos.length === 1 ? "" : "s"}`,
+      note: seguimientoBlock.descripcion || seguimientoBlock.objetivo,
+      items:
+        eventos.length > 0
+          ? eventos.map((item, idx) =>
+              createItem(laneLabel, {
+                title: item.titulo || item.nombre || `${titleCase("seguimiento")} ${idx + 1}`,
+                when: item.when,
+                body: item.descripcion || item.detalle,
+                detalles: normalizeItems(item.componentes || item.tratamientos)?.map((t) => t.titulo || t),
+              })
+            )
+          : seguimientoBlock.detalles ?
+            [
+              createItem(laneLabel, {
+                title: seguimientoBlock.titulo || titleCase("seguimiento"),
+                body: seguimientoBlock.descripcion || seguimientoBlock.objetivo,
+                when: seguimientoBlock.when,
+                detalles: seguimientoBlock.detalles,
+              }),
+            ]
+            : [
+              createItem(laneLabel, {
+                title: seguimientoBlock.titulo || titleCase("seguimiento"),
+                body: seguimientoBlock.descripcion || seguimientoBlock.objetivo,
+                when: seguimientoBlock.when,
+              }),
+            ],
+    });
+  }
 
   return phases;
 };
@@ -631,15 +803,22 @@ const buildTimeline = (phases) => {
     });
   });
 
+  // Ordenar primero por semana, luego por orden de procesamiento
   items.sort((a, b) => {
-    const hasA = a.week != null;
-    const hasB = b.week != null;
-    if (hasA && hasB) {
-      if (a.week !== b.week) return a.week - b.week;
-      return a.order - b.order;
+    // Ordenar primero por semana (si ambas tienen semana)
+    const weekA = a.week;
+    const weekB = b.week;
+
+    // Si ambos tienen semana, ordenar por semana
+    if (weekA != null && weekB != null) {
+      return weekA - weekB;
     }
-    if (hasA) return -1;
-    if (hasB) return 1;
+
+    // Si uno tiene semana y el otro no, el que tiene semana va primero
+    if (weekA != null) return -1;
+    if (weekB != null) return 1;
+
+    // Si ninguno tiene semana, ordenar por orden de procesamiento
     return a.order - b.order;
   });
 
@@ -692,16 +871,53 @@ const buildLaneTracks = (phases) => {
   return { lanes, maxWeek };
 };
 
-export default function ProtocolTimeline({ data }) {
+export default function ProtocolTimeline({ data, selectedStratId }) {
+  const [zoomLevel, setZoomLevel] = useState(2); // Nivel de zoom inicial
+  const [hiddenLanes, setHiddenLanes] = useState(new Set()); // Carriles ocultos
+  const [timelineFilters, setTimelineFilters] = useState(new Set()); // Filtros de línea temporal (equivalentes a carriles)
+
   const version = useMemo(() => {
     const versiones = Array.isArray(data.versiones) ? data.versiones : [];
     return versiones[0] || {};
   }, [data]);
 
-  const context = useMemo(() => createTimelineContext(data, version), [data, version]);
-  const phases = useMemo(() => buildPhaseSet(version, data, context), [version, data, context]);
-  const timeline = useMemo(() => buildTimeline(phases), [phases]);
-  const { lanes, maxWeek } = useMemo(() => buildLaneTracks(phases), [phases]);
+  const context = useMemo(() => createTimelineContext(data, version, selectedStratId), [data, version, selectedStratId]);
+  const phases = useMemo(() => buildPhaseSet(version, data, context, selectedStratId), [version, data, context, selectedStratId]);
+  const timelineAll = useMemo(() => buildTimeline(phases), [phases]);
+
+  // Aplicar filtros a la línea temporal
+  const timeline = useMemo(() => {
+    if (timelineFilters.size === 0) return timelineAll;
+    return timelineAll.filter(node => timelineFilters.has(node.phaseTitle?.split(' · ')[0])); // Filtro por categoría principal
+  }, [timelineAll, timelineFilters]);
+
+  const { lanes, maxWeek } = useMemo(() => buildLaneTracks(phases), [phases, zoomLevel]);
+
+  // No longer need scroll progress updates since we removed the custom scrollbar
+
+  const visibleLanes = lanes.filter(lane => !hiddenLanes.has(lane.id));
+
+  const pxPerWeek = zoomLevel === 1 ? 40 : zoomLevel === 2 ? 60 : zoomLevel === 3 ? 90 : zoomLevel === 4 ? 120 : zoomLevel === 5 ? 180 : zoomLevel === 6 ? 240 : 300;
+
+  const toggleLane = (laneId) => {
+    const newHidden = new Set(hiddenLanes);
+    if (newHidden.has(laneId)) {
+      newHidden.delete(laneId);
+    } else {
+      newHidden.add(laneId);
+    }
+    setHiddenLanes(newHidden);
+  };
+
+  const toggleTimelineFilter = (category) => {
+    const newFilters = new Set(timelineFilters);
+    if (newFilters.has(category)) {
+      newFilters.delete(category);
+    } else {
+      newFilters.add(category);
+    }
+    setTimelineFilters(newFilters);
+  };
 
   if (!timeline.length) {
     return (
@@ -716,66 +932,315 @@ export default function ProtocolTimeline({ data }) {
 
   return (
     <div className="timeline-wrapper">
-      <section className="timeline-lanes" aria-label="Carriles terapéuticos">
-        <h3 className="timeline-section__title">Mapa de carriles</h3>
-        {lanes.length > 0 && (
-          <div className="timeline-lanes__axis">
-            {(() => {
-              const effectiveMax = Math.max(maxWeek, 1);
-              const marks = [0, effectiveMax / 2, effectiveMax];
-              return marks.map((mark, idx) => (
-                <span key={idx} style={{ left: `${(mark / effectiveMax) * 100}%` }}>
-                  Semana {Math.round(mark)}
-                </span>
-              ));
-            })()}
+      <div style={{
+        position: 'relative',
+        marginBottom: '16px',
+        display: 'flex',
+        justifyContent: 'center',
+        gap: '20px',
+        flexWrap: 'wrap',
+        alignItems: 'flex-start'
+      }}>
+        {/* Lista de carriles con botones de mostrar/ocultar */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
+          minWidth: '200px'
+        }}>
+          <span style={{
+            fontSize: '12px',
+            fontWeight: 'bold',
+            color: '#666',
+            textAlign: 'center'
+          }}>
+            Carriles visibles
+          </span>
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '6px',
+            justifyContent: 'center'
+          }}>
+            {lanes.map((lane) => (
+              <button
+                key={`toggle-${lane.id}`}
+                onClick={() => toggleLane(lane.id)}
+                style={{
+                  background: hiddenLanes.has(lane.id) ? '#f0f0f0' : COLORS[slugify(lane.label)] || '#cccccc',
+                  color: hiddenLanes.has(lane.id) ? '#999' : 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '6px 8px',
+                  cursor: 'pointer',
+                  fontSize: '10px',
+                  fontWeight: 'bold',
+                  textDecoration: hiddenLanes.has(lane.id) ? 'line-through' : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+                title={hiddenLanes.has(lane.id) ? `Mostrar ${lane.label}` : `Ocultar ${lane.label}`}
+              >
+                {hiddenLanes.has(lane.id) ? '👁️‍🗨️' : '👁️'} {lane.label}
+              </button>
+            ))}
           </div>
-        )}
-        {lanes.map((lane) => {
+        </div>
+
+        {/* Control de zoom/escala */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px'
+        }}>
+          <span style={{
+            fontSize: '12px',
+            fontWeight: 'bold',
+            color: '#666',
+            textAlign: 'center'
+          }}>
+            Escala temporal
+          </span>
+          <div style={{
+            display: 'flex',
+            gap: '4px',
+            alignItems: 'center'
+          }}>
+            <button
+              onClick={() => setZoomLevel(prev => Math.max(1, prev - 1))}
+              style={{
+                background: '#2b476f',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '8px 12px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                transition: 'background 0.2s ease'
+              }}
+              disabled={zoomLevel <= 1}
+              onMouseOver={(e) => e.target.style.background = '#3b5787'}
+              onMouseOut={(e) => e.target.style.background = '#2b476f'}
+            >
+              📉 Zoom Out
+            </button>
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              background: '#ffffff',
+              padding: '4px 8px 6px',
+              borderRadius: '4px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              minWidth: '48px'
+            }}>
+              <span style={{
+                fontSize: '10px',
+                color: '#666',
+                textAlign: 'center',
+                marginBottom: '2px'
+              }}>
+                Nivel
+              </span>
+              <span style={{
+                fontSize: '16px',
+                fontWeight: 'bold',
+                color: '#2b476f'
+              }}>
+                {zoomLevel}
+              </span>
+            </div>
+            <button
+              onClick={() => setZoomLevel(prev => Math.min(6, prev + 1))}
+              style={{
+                background: '#2b476f',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '8px 12px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: 'bold',
+                transition: 'background 0.2s ease'
+              }}
+              disabled={zoomLevel >= 6}
+              onMouseOver={(e) => e.target.style.background = '#3b5787'}
+              onMouseOut={(e) => e.target.style.background = '#2b476f'}
+            >
+              🔍 Zoom +
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="timeline-lanes-scroll-container"
+        style={{
+          position: 'relative',
+          width: '100%',
+          overflowX: 'auto',
+          overflowY: 'hidden',
+          borderRadius: '12px',
+          border: '1px solid #e6ecf7',
+          background: 'linear-gradient(90deg, #ffffff 60%, rgba(230,236,247,0.4), rgba(167,194,255,0.6) 95%, rgba(255,255,255,0))',
+          boxShadow: '0 2px 8px rgba(43,106,214,0.08) inset',
+          paddingTop: '24px', // Espacio para scrollbar superior
+          paddingRight: '60px' // Espacio para las flechas
+        }}
+      >
+        {/* Scrollbar funcional arriba */}
+        <div style={{
+          position: 'absolute',
+          top: -28,
+          left: 30,
+          right: 30,
+          height: 16,
+          background: '#f0f2f5',
+          borderRadius: '8px',
+          zIndex: 1000,
+          boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+        }}>
+          <div
+            style={{
+              height: '100%',
+              width: '100%',
+              background: 'linear-gradient(90deg, #c9d6ee, #a7bdf8)',
+              borderRadius: '8px',
+              transform: 'scaleX(0.1)',
+              transformOrigin: 'left',
+              transition: 'transform 0.1s ease-out'
+            }}
+          />
+        </div>
+
+        <style jsx>{`
+          .timeline-lanes-scroll-container::-webkit-scrollbar {
+            height: 16px;
+          }
+          .timeline-lanes-scroll-container::-webkit-scrollbar-track {
+            background: #f0f2f5;
+            border-radius: 8px;
+            margin: 0 30px 0 0;
+          }
+          .timeline-lanes-scroll-container::-webkit-scrollbar-thumb {
+            background: linear-gradient(90deg, #c9d6ee, #a7bdf8);
+            border-radius: 8px;
+            border: 2px solid #f0f2f5;
+          }
+          .timeline-lanes-scroll-container::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(90deg, #a7bdf8, #7b95b4);
+          }
+          .timeline-lanes-scroll-container::-webkit-scrollbar-corner {
+            background: transparent;
+          }
+        `}</style>
+        <section className="timeline-lanes" aria-label="Carriles terapéuticos" style={{ minWidth: `${maxWeek * pxPerWeek}px`, width: 'fit-content' }}>
+          <h3 className="timeline-section__title">Mapa de carriles</h3>
+          {lanes.length > 0 && (
+            <div className="timeline-lanes__axis">
+              {(() => {
+                const effectiveMax = Math.max(maxWeek, 1);
+                const totalWidth = maxWeek * pxPerWeek;
+                const marks = [];
+                // Línea base horizontal
+                marks.push(
+                  <div key="axis-baseline" style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    top: 14,
+                    height: 1,
+                    background: '#c9d6ee'
+                  }} />
+                );
+                // Generar marcas cada semana para que sean visibles
+                const step = zoomLevel <= 2 ? 1 : zoomLevel <= 3 ? 1 : 1; // Mostrar todas las semanas cuando zoom alto
+                for (let w = 0; w <= effectiveMax; w += step) {
+                  const leftPx = (w / effectiveMax) * totalWidth;
+                  // Mostrar números más frecuentemente cuando zoom es alto
+                  const showLabel = zoomLevel >= 3 ? true : (w === 0 || w % 2 === 0); // Mostrar más números en zoom alto
+                  const label = showLabel ? (w === 0 ? '0' : zoomLevel <= 2 && w % 5 === 0 ? `${w}` : zoomLevel >= 4 ? `S${w}` : w % 2 === 0 ? `S${w}` : '') : '';
+                  const size = zoomLevel >= 3 ? '10px' : zoomLevel === 2 ? '12px' : '11px';
+                  // Línea vertical más gruesa cuando zoom alto
+                  const lineWidth = zoomLevel > 3 ? Math.min(zoomLevel * 0.4, 2) : 1;
+                  marks.push(
+                    <div key={`axis-line-${w}`} style={{
+                      position: 'absolute',
+                      left: `${leftPx}px`,
+                      top: 4,
+                      height: 24,
+                      width: lineWidth,
+                      background: '#c9d6ee',
+                      borderRadius: lineWidth > 1 ? `${lineWidth/2}px` : '0'
+                    }} />
+                  );
+                  if (label) {
+                    marks.push(
+                      <span key={`axis-label-${w}`} style={{
+                        position: 'absolute',
+                        left: `${leftPx + 4 + (lineWidth > 1 ? lineWidth : 0)}px`,
+                        top: 16,
+                        fontSize: size,
+                        color: 'rgba(103, 106, 166, 0.8)',
+                        fontWeight: w % 10 === 0 ? 'bold' : 'normal',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {label}
+                      </span>
+                    );
+                  }
+                }
+                return marks;
+              })()}
+            </div>
+          )}
+
+
+        {/* Mostrar solo carriles visibles */}
+        {visibleLanes.map((lane) => {
           const effectiveMax = Math.max(maxWeek, 1);
           return (
             <div key={lane.id} className="timeline-lane">
               <div className="timeline-lane__label">{lane.label}</div>
               <div className="timeline-lane__track">
-                {lane.events.map((event) => {
-                  const startPercent = Math.min(
-                    100,
-                    Math.max(0, (event.startWeek / effectiveMax) * 100)
-                  );
-                  const rawWidth = ((event.endWeek - event.startWeek) / effectiveMax) * 100;
-                  const widthPercent = Math.min(100 - startPercent, Math.max(rawWidth, 6));
-                  const blockSlug = slugify(lane.label);
-                  const blockClass = `timeline-block timeline-block--${blockSlug}`;
-                  return (
-                    <div
-                      key={event.id}
-                      className={blockClass}
-                      style={{ left: `${startPercent}%`, width: `${widthPercent}%` }}
-                      title={`${event.phaseTitle}${event.title ? ` · ${event.title}` : ""}`}
-                    >
-                      <span className="timeline-block__title">
-                        {event.title || event.phaseTitle}
-                      </span>
-                      {event.whenLabel && (
-                        <span className="timeline-block__time">{event.whenLabel}</span>
-                      )}
-                      {event.spanLabel && (
-                        <span className="timeline-block__span">{event.spanLabel}</span>
-                      )}
-                    </div>
-                  );
-                })}
+        {lane.events.map((event) => {
+          const startPx = (event.startWeek / effectiveMax) * (maxWeek * pxPerWeek);
+          const durationPx = ((event.endWeek - event.startWeek) / effectiveMax) * (maxWeek * pxPerWeek);
+          const widthPx = Math.max(durationPx, 40); // Minimum 40px width
+          const blockSlug = slugify(lane.label);
+          const blockClass = `timeline-block timeline-block--${blockSlug}`;
+          const wrappedTitle = lane.label === "Soporte / Profilaxis" ? (event.title || "").split(" / ")[0] : event.title;
+          return (
+            <div
+              key={event.id}
+              className={blockClass}
+              style={{ left: `${startPx}px`, width: `${widthPx}px` }}
+              title={`${event.phaseTitle}${event.title ? ` · ${event.title}` : ""}`}
+            >
+              <span className="timeline-block__title" title={event.title || event.phaseTitle}>
+                {wrappedTitle}
+              </span>
+              {widthPx > 64 && event.whenLabel && (
+                <span className="timeline-block__time">{event.whenLabel}</span>
+              )}
+              {widthPx > 80 && event.spanLabel && (
+                <span className="timeline-block__span">{event.spanLabel}</span>
+              )}
+            </div>
+          );
+        })}
               </div>
             </div>
           );
         })}
-      </section>
+        </section>
+      </div>
 
       <section className="timeline-flow-wrapper" aria-label="Línea temporal clínica">
         <h3 className="timeline-section__title">Línea temporal</h3>
         <ul className="timeline-flow">
           {timeline.map((node) => (
-            <li key={node.id} className="timeline-node">
+            <li key={node.id} className="timeline-node" title={`${node.phaseTitle}: ${node.body || ''} ${node.whenLabel || ''}`}>
               <div className="timeline-node__anchor">
                 <span className="timeline-node__dot" />
                 <span className="timeline-node__time">{formatWeekValue(node.week)}</span>

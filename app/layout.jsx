@@ -13,8 +13,13 @@ export default function RootLayout({ children }) {
   return (
     <html lang="es">
       <body className={inter.className}>
+        <a href="#main-content" className="sr-only sr-only--focusable">
+          Saltar al contenido principal
+        </a>
         <SiteHeader />
-        {children}
+        <main id="main-content">
+          {children}
+        </main>
       </body>
     </html>
   );

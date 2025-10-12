@@ -2,7 +2,25 @@
   "id": "pnet5",
   "titulo": "PNET5 Medulloblastoma (SIOP)",
   "grupo": "SIOP Europe BTG",
-  "area": "Oncología pediátrica",
+  "area": "Meduloblastoma",
+  "digest": {
+    "resumen": "Tratamiento para PNETs/meduloblastomas según SIOP: inducción quimioterapia + RT, seguido de mantenimiento ABA-BAB. Estratificación LR/SR basada en riesgo, con RT modulada: LR 18 Gy CSI, SR hasta 54 Gy total.",
+    "cards": [
+      {
+        "title": "Estratificación",
+        "content": "LR: WNT+, edad <16. SR: estándar clínico, aleatorización RT sola vs +Carbo."
+      },
+      {
+        "title": "Duración",
+        "content": "RT: 6 semanas. Mantenimiento: 42 sem LR/24 sem SR. Total ~60 sem."
+      },
+      {
+        "title": "Toxicidades clave",
+        "content": "RT: fatiga, mielosupresión. Quimio: nefro/ototoxicity cisplatino, hepatotoxicity CCNU."
+      }
+    ]
+  },
+  "fuentes": ["/data/fuentes/siop-pnet5-medulloblastoma.pdf"],
   "versiones": [
     {
       "id": "v11-2014",

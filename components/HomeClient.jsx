@@ -2,12 +2,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
+async function loadProtocol(id) {
+  const res = await fetch(`/api/protocolo/${id}`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
 const DEFAULT_AREA = "Meduloblastoma";
 
 const DIAG_GROUPS = {
   solid: {
     label: "Tumores sólidos pediátricos",
-    subtitle: "Neuroectodérmicos, renales, hepáticos, sarcomas y SNC.",
+    subtitle: "Tumores cerebrales, sarcomas, neuroblastoma y otros sólidos.",
     areas: [
       "Meduloblastoma",
       "Neuroblastoma",
@@ -103,13 +109,29 @@ const DOMAIN_OPTIONS = [
 
 const DOMAIN_ORDER = ["solid", "hemato", "otros"];
 
-export default function HomeClient({ initialData }) {
-  const data = Array.isArray(initialData) ? initialData : [];
+export default function HomeClient({ initialData, onlySearch = false }) {
+  const metaData = Array.isArray(initialData) ? initialData : [];
   const [q, setQ] = useState("");
   const [activeArea, setActiveArea] = useState("");
   const [activeDomain, setActiveDomain] = useState("todos");
+  const [fullProtocols, setFullProtocols] = useState([]);
   const searchRef = useRef(null);
   const dq = useDebouncedValue(q, 200);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const promises = metaData.map(p => loadProtocol(p.id));
+        const res = await Promise.all(promises);
+        setFullProtocols(res.filter(Boolean));
+      } catch (err) {
+        console.error("Error loading protocols:", err);
+      }
+    };
+    load();
+  }, [metaData]);
+
+  const data = fullProtocols.length ? fullProtocols : metaData;
 
   const areaToDomain = useMemo(() => {
     const map = new Map(AREA_DOMAIN_MAP);
@@ -294,155 +316,189 @@ export default function HomeClient({ initialData }) {
   return (
     <main className="container page-shell">
       <div className="home">
-        <section className="hero-card" aria-labelledby="hero-title" style={{ position: 'relative', overflow: 'hidden' }}>
-          <div className="hero-card__content">
-            <span className="hero-card__eyebrow">Oncología y hematología pediátrica</span>
-            <h1 id="hero-title">Protocolos sintetizados y estructurados</h1>
-            <p className="hero-card__lead">
-              Pediatrack resume y estructura protocolos extensos y complejos de tumores sólidos y hematológicos para hacerlos legibles y aplicables: fases de decisión, esquemas terapéuticos y seguimiento de toxicidades. Enfoque técnico, rigor y trazabilidad.
-            </p>
-            <div className="hero-card__stats">
-              <span className="stat-pill">📄 {totalProtocols} protocolo{totalProtocols === 1 ? "" : "s"} activos</span>
-              <span className="stat-pill">🧠 {domainCoverage.solid} áreas de tumores sólidos</span>
-              <span className="stat-pill">🩸 {domainCoverage.hemato} áreas hematológicas</span>
+        {!onlySearch && (
+          <section className="hero-card" aria-labelledby="hero-title">
+            <div className="hero-card__content">
+              <span className="hero-card__eyebrow">Herramientas para oncología pediátrica</span>
+              <h1 id="hero-title">Consulta de protocolos médicos</h1>
+              <p className="hero-card__lead">
+                Sistema de consulta estructurada para protocolos oncológicos pediátricos, diseñado para facilitar el acceso rápido a información clínica validada.
+              </p>
+              <div className="hero-card__stats">
+                <span className="stat-pill">{totalProtocols} protocolos disponibles</span>
+                <span className="stat-pill">{domainCoverage.solid} áreas de tumores sólidos</span>
+                <span className="stat-pill">{domainCoverage.hemato} áreas hematológicas</span>
+              </div>
+              <div className="hero-actions">
+                <Link href="/search" className="cta-button--large">
+                  Explorar protocolos
+                </Link>
+                <a href="#telemetria" className="secondary-action">
+                  Información técnica
+                </a>
+              </div>
             </div>
-          </div>
-          <div
-            className="hero-card__illustration"
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              right: '48px',
-              top: '88px',
-              width: '320px',
-              maxWidth: '32%'
-            }}
-          >
-            <img
-              src="/logo-inverso.avif"
-              alt=""
-              style={{ width: '100%', height: 'auto', display: 'block' }}
-            />
-          </div>
-        </section>
+          </section>
+        )}
 
-        <section id="protocolos" className="search-panel" aria-label="Buscador de protocolos">
-          <div className="search-panel__heading">
-            <h2>Explorar protocolos</h2>
-            <div className="search-count" aria-live="polite">
-              {isFiltering
-                ? `${protocolos.length} coincidencia${protocolos.length === 1 ? "" : "s"}`
-                : `${totalProtocols} protocolo${totalProtocols === 1 ? "" : "s"} disponibles`}
+        {onlySearch && (
+          <section id="protocolos" className="search-panel" aria-label="Buscador de protocolos">
+            <div className="search-panel__heading">
+              <h2>🔍 Búsqueda avanzada de protocolos</h2>
+              <div className="search-summary">
+                <div className="search-count" aria-live="polite">
+                  {isFiltering ? (
+                    <>
+                      <strong>{protocolos.length}</strong> resultado{protocolos.length === 1 ? "" : "s"}
+                      {q && <span className="filter-active"> · "{dq}"</span>}
+                      {activeDomain !== "todos" && <span className="filter-active"> · {DOMAIN_OPTIONS.find(d => d.id === activeDomain)?.label}</span>}
+                      {activeArea && <span className="filter-active"> · {activeArea}</span>}
+                    </>
+                  ) : (
+                    <>
+                      <strong>{totalProtocols}</strong> protocolos disponibles
+                    </>
+                  )}
+                </div>
+                {(q || activeArea || activeDomain !== "todos") && (
+                  <button
+                    type="button"
+                    className="reset-filters"
+                    onClick={() => {
+                      setQ("");
+                      setActiveArea("");
+                      setActiveDomain("todos");
+                    }}
+                    aria-label="Restablecer todos los filtros"
+                  >
+                    🧹 Limpiar todos los filtros
+                  </button>
+                )}
+              </div>
             </div>
-            <button
-              type="button"
-              className="reset-filters"
-              onClick={() => {
-                setQ("");
-                setActiveArea("");
-                setActiveDomain("todos");
-              }}
-              aria-label="Restablecer filtros"
+            <form
+              role="search"
+              aria-label="Buscar protocolo"
+              className="search-form"
+              onSubmit={(e) => e.preventDefault()}
             >
-              Reiniciar filtros
-            </button>
-          </div>
-          <form
-            role="search"
-            aria-label="Buscar protocolo"
-            className="search-form"
-            onSubmit={(e) => e.preventDefault()}
-          >
-            <div className="search-bar">
-              <input
-                ref={searchRef}
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar por protocolo, patología, grupo cooperativo o ID…"
-                aria-label="Buscar protocolos"
-                autoFocus
-                title="Pulsa / para buscar"
-              />
-              {q && (
-                <button
-                  type="button"
-                  className="search-clear"
-                  onClick={() => setQ("")}
-                  aria-label="Limpiar búsqueda"
-                >
-                  Limpiar
-                </button>
-              )}
-            </div>
+              <div className="search-section">
+                <div className="search-bar">
+                  <div className="search-input-container">
+                    <input
+                      ref={searchRef}
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      placeholder="Ej: neuroblastoma, meduloblastoma, ALL, Hodgkin…"
+                      aria-label="Buscar protocolos por nombre o código"
+                      autoFocus
+                      title="Busca por protocolos específicos, patologías o códigos. Presiona / para buscar"
+                      list="search-suggestions"
+                    />
+                    <datalist id="search-suggestions">
+                      <option value="neuroblastoma"></option>
+                      <option value="meduloblastoma"></option>
+                      <option value="sarcoma óseo"></option>
+                      <option value="sarcoma de partes blandas"></option>
+                      <option value="tumor de Wilms"></option>
+                      <option value="ALL"></option>
+                      <option value="Hodgkin"></option>
+                      <option value="PNET5"></option>
+                      <option value="HRNBL"></option>
+                      <option value="blastoma hepatocelular"></option>
+                    </datalist>
+                    {q && (
+                      <button
+                        type="button"
+                        className="search-clear"
+                        onClick={() => setQ("")}
+                        aria-label="Limpiar búsqueda"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
 
-            <div className="domain-selector" role="group" aria-label="Tipo de patología">
-              {DOMAIN_OPTIONS.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  className="domain-chip"
-                  aria-pressed={activeDomain === option.id}
-                  onClick={() => {
-                    setActiveDomain(option.id);
-                    setActiveArea("");
-                  }}
-                >
-                  <strong>{option.label}</strong>
+              <div className="filters-section">
+                <div className="filter-group">
+                  <label className="filter-label">Categoría de patología</label>
+                  <div className="domain-selector" role="group" aria-label="Tipo de patología">
+                    {DOMAIN_OPTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className={`domain-chip ${activeDomain === option.id ? 'domain-chip--active' : ''}`}
+                        aria-pressed={activeDomain === option.id}
+                        onClick={() => {
+                          setActiveDomain(option.id);
+                          setActiveArea("");
+                        }}
+                      >
+                        <strong>{option.label}</strong>
+                        <span className="domain-chip__count">
+                          {option.id === "todos"
+                            ? `${totalProtocols} protocolos`
+                            : `${domainCoverage[option.id] ?? 0} áreas`}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {activeDomain !== "todos" && filteredAreas.length > 0 && (
+                  <div className="filter-group">
+                    <label className="filter-label">Diagnósticos específicos</label>
+                    <div className="chip-group" role="group" aria-label="Filtrar por diagnóstico">
+                      <button
+                        type="button"
+                        onClick={() => setActiveArea("")}
+                        className={`chip ${activeArea === "" ? "chip--active" : ""}`}
+                        aria-pressed={activeArea === ""}
+                      >
+                        ✅ Todos los diagnósticos
+                      </button>
+                      {filteredAreas.map((area) => (
+                        <button
+                          key={area}
+                          type="button"
+                          onClick={() => setActiveArea(area)}
+                          className={`chip ${activeArea === area ? "chip--active" : ""}`}
+                          aria-pressed={activeArea === area}
+                        >
+                          {area}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </form>
+
+            {isFiltering ? (
+              protocolos.length ? (
+                <Grid protocolos={protocolos} highlight={highlight} query={dq} />
+              ) : (
+                <div className="empty-state" role="status">
+                  <strong>No encontramos resultados.</strong>
                   <span>
-                    {option.id === "todos"
-                      ? `${totalProtocols} protocolos`
-                      : `${domainCoverage[option.id] ?? 0} áreas registradas`}
+                    Ajusta el tipo de patología o modifica la búsqueda para localizar el protocolo que necesitas.
                   </span>
-                </button>
-              ))}
-            </div>
-
-            <div className="chip-group" role="group" aria-label="Filtrar por diagnóstico">
-              <span className="chip-label">Diagnósticos</span>
-              <button
-                type="button"
-                onClick={() => setActiveArea("")}
-                className={`chip ${activeArea === "" ? "chip--active" : ""}`}
-                aria-pressed={activeArea === ""}
-              >
-                Todos
-              </button>
-              {filteredAreas.map((area) => (
-                <button
-                  key={area}
-                  type="button"
-                  onClick={() => setActiveArea(area)}
-                  className={`chip ${activeArea === area ? "chip--active" : ""}`}
-                  aria-pressed={activeArea === area}
-                >
-                  {area}
-                </button>
-              ))}
-            </div>
-          </form>
-
-          {isFiltering ? (
-            protocolos.length ? (
-              <Grid protocolos={protocolos} highlight={highlight} query={dq} />
+                </div>
+              )
             ) : (
-              <div className="empty-state" role="status">
-                <strong>No encontramos resultados.</strong>
+              <div className="empty-state" role="note">
+                <strong>¿No sabes por dónde empezar?</strong>
                 <span>
-                  Ajusta el tipo de patología o modifica la búsqueda para localizar el protocolo que necesitas.
+                  Selecciona la categoría de patología o revisa más abajo las áreas integradas por tumores sólidos, hematología y soporte.
                 </span>
               </div>
-            )
-          ) : (
-            <div className="empty-state" role="note">
-              <strong>¿No sabes por dónde empezar?</strong>
-              <span>
-                Selecciona la categoría de patología o revisa más abajo las áreas integradas por tumores sólidos, hematología y soporte.
-              </span>
-            </div>
-          )}
-        </section>
+            )}
+          </section>
+        )}
 
-        {!isFiltering && groupedByDomain.length > 0 && (
+        {onlySearch && !isFiltering && groupedByDomain.length > 0 && (
           <section aria-label="Protocolos por dominio terapéutico">
             {groupedByDomain.map(({ domain, label, subtitle, areas }) => (
               <div key={domain} className="domain-section">
@@ -461,109 +517,115 @@ export default function HomeClient({ initialData }) {
           </section>
         )}
 
-        <section id="telemetria" className="insights-panel" aria-label="Resumen técnico de datos">
-          <div className="insights-header">
-            <h2>Telemetría del dataset</h2>
-            <p>Instantánea generada a partir de los archivos JSON integrados en la build.</p>
-          </div>
-          <div className="insights-grid">
-            <article className="insight-card">
-              <span className="insight-card__label">Versiones publicadas</span>
-              <span className="insight-card__value">{totalVersiones}</span>
-              <span className="insight-card__footnote">
-                Conteo de las variaciones de protocolo disponibles para revisión.
-              </span>
-            </article>
-            <article className="insight-card">
-              <span className="insight-card__label">Estrategias de riesgo</span>
-              <span className="insight-card__value">{totalEstrategias}</span>
-              <span className="insight-card__footnote">
-                Modalidades LR/SR y ramas experimentales identificadas por protocolo.
-              </span>
-            </article>
-            <article className="insight-card">
-              <span className="insight-card__label">Cobertura de radioterapia</span>
-              <span className="insight-card__value">
-                {coverage.totals.radioterapia}/{totalProtocols}
-              </span>
-              <span className="insight-card__footnote">
-                Protocolos con planificación de RT diferenciada por riesgo o rama.
-              </span>
-            </article>
-            <article className="insight-card">
-              <span className="insight-card__label">Trayectos multidisciplina</span>
-              <span className="insight-card__value">{multiDisplay}</span>
-              <span className="insight-card__footnote">
-                Quimioterapia + inmunoterapia respecto al máximo esperable por protocolo.
-              </span>
-            </article>
-          </div>
-        </section>
-
-        <section id="pipeline" className="tech-section" aria-label="Arquitectura y pipeline clínico">
-          <div className="tech-section__grid">
-            <div>
-              <h2>Arquitectura de visualización</h2>
-              <p className="tech-section__lead">
-                Cada mapa se renderiza en cliente mediante React Flow, sincronizado con el motor temporal de Pediatrack.
-                El runtime usa Next.js 14 (app router) con revalidación de 60 segundos, asegurando que las actualizaciones
-                de JSON lleguen sin despliegues manuales.
-              </p>
-              <ul className="timeline-list tech-section__timeline">
-                <li className="timeline-item">
-                  <span className="timeline-item__title">1. Parsing de protocolos</span>
-                  <p className="timeline-item__descr">
-                    `getProtocol` resuelve el fichero respetando el casing para evitar fallos en ambientes Linux/macOS.
-                  </p>
-                </li>
-                <li className="timeline-item">
-                  <span className="timeline-item__title">2. Resolución de anclas</span>
-                  <p className="timeline-item__descr">
-                    Los anchors (`rt_start`, `mtto_cycle_index`) se transforman en semanas absolutas para dibujar la línea temporal.
-                  </p>
-                </li>
-                <li className="timeline-item">
-                  <span className="timeline-item__title">3. Render adaptativo</span>
-                  <p className="timeline-item__descr">
-                    El visor alterna entre timeline clínico y mapa interactivo según la necesidad del comité oncológico.
-                  </p>
-                </li>
-              </ul>
+        {!onlySearch && (
+          <section id="telemetria" className="insights-panel" aria-label="Resumen técnico de datos">
+            <div className="insights-header">
+              <h2>Telemetría del dataset</h2>
+              <p>Instantánea generada a partir de los archivos JSON integrados en la build.</p>
             </div>
-            <div>
-              <h2>Checklist de completitud clínica</h2>
-              <div className="schema-card">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Recurso</th>
-                      <th>Protocolos cubiertos</th>
-                      <th>Notas</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {coverage.keys.map((key) => (
-                      <tr key={key}>
-                        <td><code>{key}</code></td>
-                        <td>{coverage.totals[key]} / {totalProtocols}</td>
-                        <td>
-                          {coverage.totals[key] === totalProtocols
-                            ? "Presente en todos los protocolos"
-                            : "Pendiente de completar en algunos archivos"}
-                        </td>
+            <div className="insights-grid">
+              <article className="insight-card">
+                <span className="insight-card__label">Versiones publicadas</span>
+                <span className="insight-card__value">{totalVersiones}</span>
+                <span className="insight-card__footnote">
+                  Conteo de las variaciones de protocolo disponibles para revisión.
+                </span>
+              </article>
+              <article className="insight-card">
+                <span className="insight-card__label">Estrategias de riesgo</span>
+                <span className="insight-card__value">{totalEstrategias}</span>
+                <span className="insight-card__footnote">
+                  Modalidades LR/SR y ramas experimentales identificadas por protocolo.
+                </span>
+              </article>
+              <article className="insight-card">
+                <span className="insight-card__label">Cobertura de radioterapia</span>
+                <span className="insight-card__value">
+                  {coverage.totals.radioterapia}/{totalProtocols}
+                </span>
+                <span className="insight-card__footnote">
+                  Protocolos con planificación de RT diferenciada por riesgo o rama.
+                </span>
+              </article>
+              <article className="insight-card">
+                <span className="insight-card__label">Trayectos multidisciplina</span>
+                <span className="insight-card__value">{multiDisplay}</span>
+                <span className="insight-card__footnote">
+                  Quimioterapia + inmunoterapia respecto al máximo esperable por protocolo.
+                </span>
+              </article>
+            </div>
+          </section>
+        )}
+
+        {!onlySearch && (
+          <section id="pipeline" className="tech-section" aria-label="Arquitectura y pipeline clínico">
+            <div className="tech-section__grid">
+              <div>
+                <h2>Arquitectura de visualización</h2>
+                <p className="tech-section__lead">
+                  Cada mapa se renderiza en cliente mediante React Flow, sincronizado con el motor temporal de Pediatrack.
+                  El runtime usa Next.js 14 (app router) con revalidación de 60 segundos, asegurando que las actualizaciones
+                  de JSON lleguen sin despliegues manuales.
+                </p>
+                <ul className="timeline-list tech-section__timeline">
+                  <li className="timeline-item">
+                    <span className="timeline-item__title">1. Parsing de protocolos</span>
+                    <p className="timeline-item__descr">
+                      `getProtocol` resuelve el fichero respetando el casing para evitar fallos en ambientes Linux/macOS.
+                    </p>
+                  </li>
+                  <li className="timeline-item">
+                    <span className="timeline-item__title">2. Resolución de anclas</span>
+                    <p className="timeline-item__descr">
+                      Los anchors (`rt_start`, `mtto_cycle_index`) se transforman en semanas absolutas para dibujar la línea temporal.
+                    </p>
+                  </li>
+                  <li className="timeline-item">
+                    <span className="timeline-item__title">3. Render adaptativo</span>
+                    <p className="timeline-item__descr">
+                      El visor alterna entre timeline clínico y mapa interactivo según la necesidad del comité oncológico.
+                    </p>
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h2>Checklist de completitud clínica</h2>
+                <div className="schema-card">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Recurso</th>
+                        <th>Protocolos cubiertos</th>
+                        <th>Notas</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {coverage.keys.map((key) => (
+                        <tr key={key}>
+                          <td><code>{key}</code></td>
+                          <td>{coverage.totals[key]} / {totalProtocols}</td>
+                          <td>
+                            {coverage.totals[key] === totalProtocols
+                              ? "Presente en todos los protocolos"
+                              : "Pendiente de completar en algunos archivos"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
-      </div>
+          </section>
+        )}
 
-      <footer className="page-footer">
-        © {new Date().getFullYear()} Pediatrack — prototipado clínico. Esta demo no sustituye a la práctica clínica ni a los documentos oficiales del protocolo.
-      </footer>
+        {!onlySearch && (
+          <footer className="page-footer">
+            © {new Date().getFullYear()} Pediatrack — prototipado clínico. Esta demo no sustituye a la práctica clínica ni a los documentos oficiales del protocolo.
+          </footer>
+        )}
+      </div>
     </main>
   );
 }

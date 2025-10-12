@@ -1,0 +1,235 @@
+{
+  "id": "hrnbl",
+  "titulo": "Neuroblastoma de Alto Riesgo (SIOPEN)",
+  "nombre": "HR-NBL SIOPEN",
+  "grupo": "SIOPEN",
+  "area": "Neuroblastoma",
+  "versiones": [
+    {
+      "id": "hrnbl-2019",
+      "nombre": "Versión internacional 2019",
+      "descripcion": "Protocolo multimodal para pacientes con neuroblastoma de alto riesgo. Incluye inducción RAPID COJEC, cirugía de resección, consolidación con BuMel + trasplante autólogo y fase de inmunoterapia con dinutuximab beta.",
+      "estratificacion": [
+        { "id": "alto_riesgo", "label": "Alto riesgo HR-NBL", "default": true }
+      ],
+      "evaluacion": [
+        {
+          "id": "eval-dx",
+          "momento": "inicial",
+          "titulo": "Diagnóstico y estadificación",
+          "descripcion": "RM/TAC de masas primarias, MIBG corporal total, aspirado y biopsia de médula ósea bilateral, PET-TC si MIBG negativo.",
+          "when": { "anchor": "treatment_start" }
+        },
+        {
+          "id": "eval-post-induccion",
+          "momento": "pre_cirugia",
+          "titulo": "Respuesta tras inducción",
+          "descripcion": "MIBG/TAC para respuesta según SIOPEN, cuantificación de enfermedad residual mínima y planificación quirúrgica.",
+          "when": { "anchor": "induction_cycle_index", "cycle_index": 7, "offset_weeks": 1 }
+        },
+        {
+          "id": "eval-post-bumel",
+          "momento": "post_consolidacion",
+          "titulo": "Evaluación post BuMel",
+          "descripcion": "MIBG/TAC, aspirado medular y MRD para confirmar respuesta completa antes de inmunoterapia.",
+          "when": { "anchor": "treatment_start", "offset_weeks": 24 }
+        }
+      ],
+      "cirugia": {
+        "titulo": "Resección tumoral",
+        "descripcion": "Resección máxima segura tras inducción, idealmente R0/R1. Realizar en centro de referencia con experiencia en cirugía de neuroblastoma.",
+        "when": { "anchor": "induction_cycle_index", "cycle_index": 7, "offset_weeks": 1 }
+      },
+      "radioterapia": {
+        "opciones": [
+          {
+            "id": "rt_local",
+            "label": "RT lecho tumoral",
+            "when": { "anchor": "treatment_start", "offset_weeks": 26 },
+            "duracion_semanas": 2,
+            "nota": "21,6 Gy en 12 fracciones. Considerar boost a 36 Gy si márgenes positivos o enfermedad residual."
+          }
+        ]
+      },
+      "quimioterapia": {
+        "induccion_intervalo_semanas": 1.43,
+        "induccion": [
+          {
+            "id": "rapid-cojec-a1",
+            "tipo": "q_induccion",
+            "titulo": "RAPID COJEC · A1",
+            "descripcion": "Vincristina 1.5 mg/m², Carboplatino 560 mg/m², Etopósido 100 mg/m².",
+            "when": { "anchor": "induction_cycle_index", "cycle_index": 0 },
+            "drogas": [
+              { "nombre": "Vincristina", "dosis": "1.5 mg/m² IV", "dias": [1] },
+              { "nombre": "Carboplatino", "dosis": "560 mg/m² IV", "dias": [1, 2] },
+              { "nombre": "Etopósido", "dosis": "100 mg/m² IV", "dias": [1, 2, 3] }
+            ]
+          },
+          {
+            "id": "rapid-cojec-b1",
+            "tipo": "q_induccion",
+            "titulo": "RAPID COJEC · B1",
+            "descripcion": "Vincristina y perfusión continua de Cisplatino (80 mg/m²).",
+            "when": { "anchor": "induction_cycle_index", "cycle_index": 1 },
+            "drogas": [
+              { "nombre": "Vincristina", "dosis": "1.5 mg/m² IV", "dias": [1] },
+              { "nombre": "Cisplatino", "dosis": "80 mg/m² total en 96h", "dias": [1, 2, 3, 4, 5] }
+            ]
+          },
+          {
+            "id": "rapid-cojec-c1",
+            "tipo": "q_induccion",
+            "titulo": "RAPID COJEC · C1",
+            "descripcion": "Vincristina, Etopósido 150 mg/m², Ciclofosfamida 1.000 mg/m².",
+            "when": { "anchor": "induction_cycle_index", "cycle_index": 2 },
+            "drogas": [
+              { "nombre": "Vincristina", "dosis": "1.5 mg/m² IV", "dias": [1] },
+              { "nombre": "Etopósido", "dosis": "150 mg/m² IV", "dias": [1, 2, 3] },
+              { "nombre": "Ciclofosfamida", "dosis": "1.000 mg/m² IV", "dias": [1, 2] }
+            ]
+          },
+          {
+            "id": "rapid-cojec-b2",
+            "tipo": "q_induccion",
+            "titulo": "RAPID COJEC · B2",
+            "descripcion": "Repetición del curso B con monitorización estrecha de función renal y auditiva.",
+            "when": { "anchor": "induction_cycle_index", "cycle_index": 3 },
+            "drogas": [
+              { "nombre": "Vincristina", "dosis": "1.5 mg/m² IV", "dias": [1] },
+              { "nombre": "Cisplatino", "dosis": "80 mg/m² total en 96h", "dias": [1, 2, 3, 4, 5] }
+            ]
+          },
+          {
+            "id": "rapid-cojec-a2",
+            "tipo": "q_induccion",
+            "titulo": "RAPID COJEC · A2",
+            "descripcion": "Repetición del curso A con ajustes según toxicidad previa.",
+            "when": { "anchor": "induction_cycle_index", "cycle_index": 4 },
+            "drogas": [
+              { "nombre": "Vincristina", "dosis": "1.5 mg/m² IV", "dias": [1] },
+              { "nombre": "Carboplatino", "dosis": "560 mg/m² IV", "dias": [1, 2] },
+              { "nombre": "Etopósido", "dosis": "100 mg/m² IV", "dias": [1, 2, 3] }
+            ]
+          },
+          {
+            "id": "rapid-cojec-b3",
+            "tipo": "q_induccion",
+            "titulo": "RAPID COJEC · B3",
+            "descripcion": "Tercer curso B; asegurar hidratación intensiva y control electrolítico.",
+            "when": { "anchor": "induction_cycle_index", "cycle_index": 5 },
+            "drogas": [
+              { "nombre": "Vincristina", "dosis": "1.5 mg/m² IV", "dias": [1] },
+              { "nombre": "Cisplatino", "dosis": "80 mg/m² total en 96h", "dias": [1, 2, 3, 4, 5] }
+            ]
+          },
+          {
+            "id": "rapid-cojec-c2",
+            "tipo": "q_induccion",
+            "titulo": "RAPID COJEC · C2",
+            "descripcion": "Segundo curso C para consolidar respuesta medular y sistémica.",
+            "when": { "anchor": "induction_cycle_index", "cycle_index": 6 },
+            "drogas": [
+              { "nombre": "Vincristina", "dosis": "1.5 mg/m² IV", "dias": [1] },
+              { "nombre": "Etopósido", "dosis": "150 mg/m² IV", "dias": [1, 2, 3] },
+              { "nombre": "Ciclofosfamida", "dosis": "1.000 mg/m² IV", "dias": [1, 2] }
+            ]
+          },
+          {
+            "id": "rapid-cojec-b4",
+            "tipo": "q_induccion",
+            "titulo": "RAPID COJEC · B4",
+            "descripcion": "Último curso B del esquema RAPID COJEC antes de la valoración quirúrgica.",
+            "when": { "anchor": "induction_cycle_index", "cycle_index": 7 },
+            "drogas": [
+              { "nombre": "Vincristina", "dosis": "1.5 mg/m² IV", "dias": [1] },
+              { "nombre": "Cisplatino", "dosis": "80 mg/m² total en 96h", "dias": [1, 2, 3, 4, 5] }
+            ]
+          }
+        ],
+        "consolidacion": [
+          {
+            "id": "bumel",
+            "tipo": "q_consolidacion",
+            "titulo": "BuMel + rescate de progenitores",
+            "descripcion": "Busulfán fraccionado + Melfalán 140 mg/m² como acondicionamiento previo al rescate autólogo.",
+            "when": { "anchor": "treatment_start", "offset_weeks": 20 },
+            "drogas": [
+              { "nombre": "Busulfán", "dosis": "0.8-1 mg/kg cada 6h × 4 días", "dias": [1, 2, 3, 4] },
+              { "nombre": "Melfalán", "dosis": "140 mg/m² IV", "dias": [5] }
+            ]
+          }
+        ]
+      },
+      "inmunoterapia": {
+        "eventos": [
+          {
+            "id": "dinutuximab-1",
+            "titulo": "Dinutuximab beta + IL-2",
+            "descripcion": "IL-2 SC días 1-5, dinutuximab beta 10 mg/m²/día días 8-17 e isotretinoína días 20-33.",
+            "when": { "anchor": "treatment_start", "offset_weeks": 28 }
+          },
+          {
+            "id": "dinutuximab-2",
+            "titulo": "Dinutuximab beta sin IL-2",
+            "descripcion": "Dinutuximab beta 10 mg/m²/día días 1-10 e isotretinoína días 13-26.",
+            "when": { "anchor": "treatment_start", "offset_weeks": 33 }
+          },
+          {
+            "id": "dinutuximab-3",
+            "titulo": "Ciclos 3 y 4 alternos",
+            "descripcion": "Alternar ciclos con y sin IL-2 según calendario SIOPEN; isotretinoína 160 mg/m²/día 14 días on/off.",
+            "when": { "anchor": "treatment_start", "offset_weeks": 38 }
+          }
+        ]
+      },
+      "soporte": {
+        "descripcion": "Cuidados transversales imprescindibles durante cada fase.",
+        "medidas": [
+          {
+            "titulo": "Soporte antiinfeccioso intensivo",
+            "descripcion": "G-CSF tras cada ciclo, profilaxis antibiótica en neutropenia, antifúngicos en mucositis grave y vigilancia de catéter.",
+            "tipo": "Infecciosas",
+            "cuando": "Durante los 6 ciclos RAPID COJEC",
+            "when": { "anchor": "induction_cycle_span", "start_index": 0, "end_index": 7 }
+          },
+          {
+            "titulo": "Protección digestiva y nutrición",
+            "descripcion": "Nutrición parenteral en mucositis, sonda si ingesta <60%, antiemesis triple estándar.",
+            "tipo": "Soporte digestivo",
+            "when": { "anchor": "induction_cycle_span", "start_index": 0, "end_index": 7 }
+          },
+          {
+            "titulo": "Manejo del dolor en inmunoterapia",
+            "descripcion": "Gabapentina profiláctica, perfusión analgésica con morfina, control de síndrome de fuga capilar y soporte hemodinámico.",
+            "tipo": "Dolor",
+            "when": { "anchor": "treatment_start", "offset_weeks": 28 }
+          }
+        ]
+      },
+      "profilaxis": {
+        "titulo": "Profilaxis por fases",
+        "descripcion": "Anticonvulsivantes con Busulfán, defibrotide si alto riesgo de VOD, MESNA en oxazafosforinas.",
+        "eventos": [
+          {
+            "id": "profilaxis-induccion",
+            "titulo": "Profilaxis inducción",
+            "descripcion": "MESNA y alcalinización en ciclos C; control electrolítico y soporte hídrico intensivo.",
+            "when": { "anchor": "induction_cycle_span", "start_index": 0, "end_index": 7 }
+          },
+          {
+            "id": "profilaxis-bumel",
+            "titulo": "Profilaxis BuMel",
+            "descripcion": "Fenitoína 5 días, defibrotide 6.25 mg/kg/6h hasta día +21, profilaxis antifúngica.",
+            "when": { "anchor": "treatment_start", "offset_weeks": 20 }
+          }
+        ]
+      },
+      "seguimiento": {
+        "titulo": "Seguimiento estructurado",
+        "descripcion": "Primer año: revisión mensual y MIBG cada 3 meses. Años 2-3: consulta bimensual e imagen semestral. Años 4-5: consulta trimestral e imagen anual.",
+        "when": { "anchor": "treatment_end" }
+      }
+    }
+  ]
+}
