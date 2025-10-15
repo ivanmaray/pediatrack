@@ -319,7 +319,7 @@ export default function HomeClient({ initialData, onlySearch = false }) {
         {!onlySearch && (
           <section className="hero-card" aria-labelledby="hero-title">
             <div className="hero-card__content">
-              <span className="hero-card__eyebrow">Herramientas para oncología pediátrica</span>
+              <span className="hero-card__eyebrow">Herramientas para oncología y hematología pediátrica</span>
               <h1 id="hero-title">Consulta de protocolos médicos</h1>
               <p className="hero-card__lead">
                 Sistema de consulta estructurada para protocolos oncológicos pediátricos, diseñado para facilitar el acceso rápido a información clínica validada.
@@ -333,9 +333,6 @@ export default function HomeClient({ initialData, onlySearch = false }) {
                 <Link href="/search" className="cta-button--large">
                   Explorar protocolos
                 </Link>
-                <a href="#telemetria" className="secondary-action">
-                  Información técnica
-                </a>
               </div>
             </div>
           </section>

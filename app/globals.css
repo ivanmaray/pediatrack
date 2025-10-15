@@ -1,3 +1,37 @@
+.cta-button--large {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 18px 32px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  border: none;
+  color: #ffffff;
+  background: linear-gradient(130deg, #ffd27a 0%, #ffac3f 45%, #ffbe66 100%);
+  box-shadow: 0 24px 45px rgba(255, 172, 63, 0.4);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.2s ease;
+}
+
+.cta-button--large:hover,
+.cta-button--large:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 28px 52px rgba(255, 172, 63, 0.5);
+  filter: brightness(1.05);
+  outline: none;
+}
+
+.cta-button--large:active {
+  transform: translateY(0);
+  box-shadow: 0 18px 38px rgba(255, 172, 63, 0.32);
+}
+
+.hero-actions .cta-button--large {
+  min-width: 240px;
+  text-align: center;
+}
 .sr-only {
   position: absolute;
   width: 1px;
@@ -190,21 +224,27 @@ h3 {
 .hero-card h1 {
   font-size: clamp(32px, 4vw, 46px);
   line-height: 1.1;
-  color: #ffffff;
+  color: #0f4c81;
 }
 
-.hero-card__lead {
-  margin: 0;
-  font-size: clamp(16px, 2vw, 18px);
-  color: rgba(255, 255, 255, 0.88);
-  line-height: 1.6;
-  max-width: 640px;
+.hero-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  padding: 32px clamp(28px, 5vw, 40px);
+  background: linear-gradient(145deg, #041627 0%, #082f4e 45%, #0a1f34 100%);
+  box-shadow: 0 24px 60px rgba(4, 22, 39, 0.45);
 }
 
-.hero-card__stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+.hero-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 78% 20%, rgba(31, 138, 112, 0.28), transparent 55%),
+    radial-gradient(circle at 18% 82%, rgba(15, 76, 129, 0.24), transparent 52%);
+  pointer-events: none;
+  opacity: 0.85;
 }
 
 .stat-pill {
