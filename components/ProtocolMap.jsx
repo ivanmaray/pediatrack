@@ -3,11 +3,15 @@
 import { useMemo, useState, useEffect } from "react";
 import React from "react";
 import ReactFlow, { Background, Controls, MiniMap, Position } from "reactflow";
+import * as htmlToImage from 'html-to-image';
+import jsPDF from 'jspdf';
 import "reactflow/dist/style.css";
 
 const CustomNode = ({ data, ...props }) => {
+  // Tooltip nativo con el contenido o un tooltip provisto
+  const title = data?.tooltip || (typeof data?.label === 'string' ? data.label.replace(/\n/g, ' ') : undefined);
   return (
-    <div style={data.style}>
+    <div style={data.style} title={title}>
       {data.label}
     </div>
   );
@@ -69,7 +73,8 @@ const sumCyclesUntil = (orden, durations, indexIncl) => {
 };
 
 // ---- Lane packing (avoid overlap on same lane) ----
-const LANE_ROW_HEIGHT = 120;
+// Compactar altura vertical entre lanes para ver más contenido sin scroll
+const LANE_ROW_HEIGHT = 96;
 
 /** Color por tipo genérico **/
 const COLORS = {
@@ -97,28 +102,28 @@ const THEME = {
   panelBg: "#ffffff",
   panelBorder: "#d8e1f1",
   text: "#0e1220",
-  textMuted: "#55627a",
-  grid: "#e6ecf7",
-  gridStrong: "#c9d6ee",
+  textMuted: "#4a5970",
+  grid: "#e8eef9",
+  gridStrong: "#d2dcf1",
 };
 
 const PALETTE = {
-  evaluacion: { grad: "linear-gradient(135deg, #8fb3ff, #638cff)", border: "#547cf0" },
-  imagen:     { grad: "linear-gradient(135deg, #89d2ff, #59b7f9)", border: "#4aa7ea" },
-  cirugia:    { grad: "linear-gradient(135deg, #8e9aa7, #667180)", border: "#7b8797" },
-  radioterapia:{grad: "linear-gradient(135deg, #6aa2ff, #3a6ed8)", border: "#4f7fe0" },
-  rt_sola:    { grad: "linear-gradient(135deg, #7ca7d9, #4e77ad)", border: "#5a87bf" },
-  rt_carbo:   { grad: "linear-gradient(135deg, #56d6d1, #2ca2a0)", border: "#35b9b6" },
-  quimioterapia:{grad:"linear-gradient(135deg, #b491ff, #8b65f6)", border: "#a17cfb" },
-  q_induccion:{ grad: "linear-gradient(135deg, #a387ff, #7c5df0)", border: "#8f70f5" },
-  q_consolidacion:{grad:"linear-gradient(135deg, #9c7cff, #6f53e6)", border: "#8468f0" },
-  q_mantenimiento:{grad:"linear-gradient(135deg, #8d6eff, #5c3fdc)", border: "#7b5aef" },
-  q_reinduccion:{ grad: "linear-gradient(135deg, #7e5fff, #4d32d2)", border: "#6a4ae7" },
-  inmunoterapia:{ grad: "linear-gradient(135deg, #5bd0a8, #2aa87e)", border: "#30b58a" },
-  trasplante: { grad: "linear-gradient(135deg, #ff9b7e, #e46d47)", border: "#f08764" },
-  profilaxis:  { grad: "linear-gradient(135deg, #64ccd6, #2aa6b2)", border: "#36b8c4" },
-  soporte:     { grad: "linear-gradient(135deg, #d1b45f, #a9872b)", border: "#c19b43" },
-  seguimiento: { grad: "linear-gradient(135deg, #9bc2ff, #6b95e6)", border: "#7da6f0" }
+  evaluacion:      { grad: "linear-gradient(135deg, #a9c2ff, #7b99eb)", border: "#6d8be0" },
+  imagen:          { grad: "linear-gradient(135deg, #9ee0ff, #6fc0f6)", border: "#5ab0ea" },
+  cirugia:         { grad: "linear-gradient(135deg, #a3adb9, #7a8592)", border: "#8c97a6" },
+  radioterapia:    { grad: "linear-gradient(135deg, #81b0ff, #5078d9)", border: "#5d86e0" },
+  rt_sola:         { grad: "linear-gradient(135deg, #8ab3dd, #587eaf)", border: "#6790c2" },
+  rt_carbo:        { grad: "linear-gradient(135deg, #73ded9, #3aaea9)", border: "#46c3bd" },
+  quimioterapia:   { grad: "linear-gradient(135deg, #c2adff, #9a83f5)", border: "#ad97fb" },
+  q_induccion:     { grad: "linear-gradient(135deg, #b9a2ff, #8a71f1)", border: "#9b83f6" },
+  q_consolidacion: { grad: "linear-gradient(135deg, #b197ff, #815fe6)", border: "#9577f0" },
+  q_mantenimiento: { grad: "linear-gradient(135deg, #a485ff, #6d4ee0)", border: "#8a6aef" },
+  q_reinduccion:   { grad: "linear-gradient(135deg, #9874ff, #5a3bd6)", border: "#7755e7" },
+  inmunoterapia:   { grad: "linear-gradient(135deg, #74dbba, #3db18a)", border: "#46be96" },
+  trasplante:      { grad: "linear-gradient(135deg, #ffb6a3, #ea8567)", border: "#f2967a" },
+  profilaxis:      { grad: "linear-gradient(135deg, #7ad7df, #3cb2be)", border: "#4cc6d0" },
+  soporte:         { grad: "linear-gradient(135deg, #e1ca7a, #b7923f)", border: "#c6a452" },
+  seguimiento:     { grad: "linear-gradient(135deg, #afc8ff, #809fe6)", border: "#90aef0" },
 };
 
 const styleFor = (kind, wide = false, pxRef = 40) => {
@@ -163,13 +168,17 @@ const styleFor = (kind, wide = false, pxRef = 40) => {
  */
 export default function ProtocolMap({ data, showHeader = true, showLegend = true, selectedStratId }) {
   const [pxPerWeek, setPxPerWeek] = useState(60);
+  const [autoScale, setAutoScale] = useState(true);
   useEffect(() => {
     const onResize = () => setPxPerWeek(typeof window !== 'undefined' && window.innerWidth < 768 ? 40 : 60);
-    onResize();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
+    if (autoScale) {
+      onResize();
+      window.addEventListener('resize', onResize);
+      return () => window.removeEventListener('resize', onResize);
+    }
+  }, [autoScale]);
   const [versionId, setVersionId] = useState(data.versiones[0].id);
+  const mapRef = React.useRef(null);
   // Modos de RT para clarificar opciones
   const hasLR = !!((data.versiones?.[0]?.radioterapia?.LR) || (data.versiones?.find(Boolean)?.radioterapia?.LR));
   const hasSR = !!((data.versiones?.[0]?.radioterapia?.SR) || (data.versiones?.find(Boolean)?.radioterapia?.SR));
@@ -195,6 +204,7 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
   const qx = (version.cirugia ?? base.cirugia) || null;
   const evals = (version.evaluacion ?? base.evaluacion) || null;
   const qtx = (version.quimioterapia ?? base.quimioterapia) || null;
+  const induccionIntervalWeeks = Number(qtx?.induccion_intervalo_semanas || 2);
   const inmuno = (version.inmunoterapia ?? base.inmunoterapia) || null;
   const txp = (version.trasplante ?? base.trasplante) || null;
   const prof = (version.profilaxis ?? base.profilaxis) || null;
@@ -274,8 +284,8 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
     const mttoStartOffset = (() => {
       const q = version.quimioterapia ?? base.quimioterapia;
       const rel = q?.inicio_relativo;
-      if (rel?.anchor === "rt_end") return (rtSpan + Number(rel.offset_weeks || 0));
-      return (rtSpan + 6); // fallback habitual PNET5
+      if (rel?.anchor === "rt_end") return (rtStartWeek + rtSpan + Number(rel.offset_weeks || 0));
+      return (rtStartWeek + rtSpan + 6); // fallback habitual PNET5
     })();
 
     // Tratamiento total en semanas (aprox): fin de mantenimiento
@@ -284,6 +294,14 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
 
     // Anchors resolver (when → absolute week)
     const resolveWhenWeek = (when) => {
+      // Support when as an array of alternative anchors: pick first resolvable
+      if (Array.isArray(when)) {
+        for (const w of when) {
+          const r = resolveWhenWeek(w);
+          if (r !== null && typeof r !== 'undefined') return r;
+        }
+        return null;
+      }
       if (!when || !when.anchor) return null;
       const off = Number(when.offset_weeks || 0);
       switch (when.anchor) {
@@ -295,6 +313,11 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
           return rtStartWeek + rtSpan + off;
         case "mtto_start":
           return mttoStartOffset + off;
+        case "induction_cycle_index": {
+          const idx = Number(when.cycle_index || 0);
+          // Colocar ciclos de inducción según índice y un intervalo medio declarado
+          return Math.max(0, Math.round(idx * induccionIntervalWeeks)) + off;
+        }
         case "mtto_cycle_index": {
           const idx = Number(when.cycle_index || 0);
           const w = mttoStartOffset + sumCyclesUntil(mttoOrden, mttoDur, idx);
@@ -437,7 +460,8 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
         kind: "cirugia",
         label: mkLabel(`Semana de inicio: S0`, "Cirugía", qx.descripcion || "", qx.criterios || ""),
         posX: weekToX(0),
-        duration: 1
+        duration: 1,
+        meta: { type: 'cirugia', ...qx }
       });
       if (lastId) link(lastId, id);
       lastId = id;
@@ -462,12 +486,13 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
             (rt.LR.nota || "").trim()
           ),
           posX: weekToX(rtStartWeek),
-          duration: rtSpanLR
+          duration: rtSpanLR,
+          meta: { type: 'rt', riesgo: 'LR', semanas: { inicio: startW, fin: endW }, nota: rt.LR.nota || '' }
         });
         if (lastId) link(lastId, id);
         lastId = id;
       }
-      if ((rtMode === "SR_sola" || rtMode === "ALL") && rt.SR) {
+  if ((rtMode === "SR_sola" || rtMode === "ALL") && rt.SR) {
         const ramas = rt.SR?.ramas || [];
         const chosen = ramas.find(r => (r.id || "").includes("rt_sola")) || ramas[0];
         if (chosen) {
@@ -486,12 +511,13 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
               (chosen.nota || rtOptions.find(o=>o.id==="sr_rt_sola")?.nota || "").trim()
             ),
             posX: weekToX(rtStartWeek),
+            meta: { type: 'rt', riesgo: 'SR', rama: 'rt_sola', semanas: { inicio: startW, fin: endW }, nota: (chosen.nota || rtOptions.find(o=>o.id==="sr_rt_sola")?.nota || '') }
           });
           if (lastId) link(lastId, id);
           lastId = id;
         }
       }
-      if ((rtMode === "SR_carbo" || rtMode === "ALL") && rt.SR) {
+  if ((rtMode === "SR_carbo" || rtMode === "ALL") && rt.SR) {
         const ramas = rt.SR?.ramas || [];
         const chosen = ramas.find(r => (r.id || "").includes("carbo"));
         if (chosen) {
@@ -510,10 +536,36 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
               (chosen.nota || rtOptions.find(o=>o.id==="sr_rt_carbo")?.nota || "").trim()
             ),
             posX: weekToX(rtStartWeek),
+            meta: { type: 'rt', riesgo: 'SR', rama: 'rt_carbo', semanas: { inicio: startW, fin: endW }, nota: (chosen.nota || rtOptions.find(o=>o.id==="sr_rt_carbo")?.nota || '') }
           });
           if (lastId) link(lastId, id);
           lastId = id;
         }
+      }
+      // Fallback: si no hay estructura LR/SR pero existen radioterapia.opciones simples
+      if (!rt.LR && !rt.SR && Array.isArray(rtOptions) && rtOptions.length > 0) {
+        rtOptions.forEach((opt, i) => {
+          const id = `rt-opt-${i}`;
+          const w = opt.when || { anchor: 'treatment_start', offset_weeks: 0 };
+          const startW = resolveWhenWeek(w) ?? 0;
+          const endW = startW + Number(opt.duracion_semanas || 2);
+          pushNode({
+            id,
+            yKey: 'radioterapia',
+            kind: 'radioterapia',
+            label: mkLabel(
+              `Semana de inicio: S${startW}`,
+              opt.label || 'Radioterapia',
+              `Semanas: S${startW}–S${endW}`,
+              (opt.nota || '').trim()
+            ),
+            posX: weekToX(startW),
+            duration: Number(opt.duracion_semanas || 2),
+            meta: { type: 'rt', opcion: opt, semanas: { inicio: startW, fin: endW }, nota: opt.nota || '' }
+          });
+          if (lastId) link(lastId, id);
+          lastId = id;
+        });
       }
     }
 
@@ -548,7 +600,7 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
           ciclo.descripcion || "",
           Array.isArray(ciclo.drogas) ? `Medicación:\n${ciclo.drogas.filter(d => d.nombre).map(d => `- ${d.nombre}: ${d.dosis}`).join('\n')}` : ""
         );
-        pushNode({ id, yKey: "quimioterapia", kind: "q_induccion", label, wide: true, posX });
+        pushNode({ id, yKey: "quimioterapia", kind: "q_induccion", label, wide: true, posX, meta: { type: 'induccion', ciclo } });
         if (idx === 0 && lastId) link(lastId, id); // Primer ciclo
         else if (idx > 0) link(`q-induccion-${idx - 1}`, id); // Entre ciclos consecutivos
         lastId = id;
@@ -586,7 +638,8 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
           qtx.consolidacion.duracion ? `Duración: ${qtx.consolidacion.duracion}` : "",
           Array.isArray(qtx.consolidacion.farmacos) ? `Fármacos: ${qtx.consolidacion.farmacos.join(", ")}` : ""
         );
-      pushNode({ id, yKey: "quimioterapia", kind: "q_consolidacion", label, wide: true, posX: targetX });
+      const metaCons = Array.isArray(qtx.consolidacion) ? { type: 'consolidacion', evento: qtx.consolidacion[0] } : { type: 'consolidacion', evento: qtx.consolidacion };
+      pushNode({ id, yKey: "quimioterapia", kind: "q_consolidacion", label, wide: true, posX: targetX, meta: metaCons });
       if (lastId) link(lastId, id);
       lastId = id;
       x = Math.max(x, targetX) + 190;
@@ -679,6 +732,7 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
           txp.condicionamiento ? `Acond.: ${Array.isArray(txp.condicionamiento) ? txp.condicionamiento.join(", ") : txp.condicionamiento}` : "",
           txp.detalles ? txp.detalles.join(", ") : ""
         ),
+        meta: { type: 'trasplante', ...txp }
       });
       if (lastId) link(lastId, id);
       lastId = id;
@@ -700,6 +754,7 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
             ciclo.descripcion || ""
           ),
           wide: true,
+          meta: { type: 'inmunoterapia', ciclo }
         });
         if (idx === 0 && lastId) link(lastId, id); // Conectar primer ciclo al trasplante
         else if (idx > 0) link(`inmuno-${idx - 1}`, id); // Entre ciclos consecutivos
@@ -720,6 +775,7 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
           Array.isArray(inmuno.farmacos) ? `Fármacos: ${inmuno.farmacos.join(", ")}` : "",
           Array.isArray(inmuno.antiinfecciosa) ? `Anti-infecciosa: ${inmuno.antiinfecciosa.join(", ")}` : ""
         ),
+        meta: { type: 'inmunoterapia', ...inmuno }
       });
       if (lastId) link(lastId, id);
       lastId = id;
@@ -838,10 +894,88 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
     return { nodes, edges };
   }, [versionId, rt, qx, evals, qtx, inmuno, txp, prof, soporte, seg, legadoMtto, pxPerWeek, rtMode]);
 
+  // Deep link: focus node by query (?focus=node-id) on mount/update
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let id = '';
+    try {
+      const url = new URL(window.location.href);
+      id = url.searchParams.get('focus') || '';
+    } catch {}
+    if (!id) return;
+    const node = nodes.find(n => n.id === id);
+    if (node) {
+      setViewport(v => ({ ...v, x: Math.max(0, node.position.x - 100), y: Math.max(0, node.position.y - 100), zoom: 1 }));
+      // Simular click para abrir panel de detalle: buscamos el tipo y meta en data
+      // Nota: ReactFlow no expone programático click fácil; dejamos el hash para compartir posición.
+    }
+  }, [nodes]);
+
+  const handleExport = async () => {
+    try {
+      const node = mapRef.current;
+      if (!node) return;
+      const dataUrl = await htmlToImage.toPng(node, { pixelRatio: 2, backgroundColor: '#f6f8fc' });
+      const link = document.createElement('a');
+      link.download = `${(data?.id || 'mapa')}-${versionId}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (e) {
+      console.error('Exportación fallida', e);
+      alert('No se pudo exportar la imagen.');
+    }
+  };
+
+  const handleExportPDF = async () => {
+    try {
+      const node = mapRef.current;
+      if (!node) return;
+      const dataUrl = await htmlToImage.toPng(node, { pixelRatio: 2, backgroundColor: '#ffffff' });
+      const img = new Image();
+      img.src = dataUrl;
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+      const imgWidth = 190; // mm (aprox A4 width minus margins)
+      const imgHeight = img.height * (imgWidth / img.width);
+      const pdf = new jsPDF({ orientation: imgWidth > imgHeight ? 'l' : 'p', unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      let x = 10, y = 10, w = pageWidth - 20, h = img.height * (w / img.width);
+      if (h <= pageHeight - 20) {
+        pdf.addImage(dataUrl, 'PNG', x, y, w, h);
+      } else {
+        // Paginar si es más alto que una página
+        let canvas = document.createElement('canvas');
+        const scale = (img.width > 2000 ? 2000 / img.width : 1);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const pageHpx = Math.floor((pageHeight - 20) * (canvas.width / (pageWidth - 20)));
+        let offset = 0;
+        while (offset < canvas.height) {
+          const slice = ctx.getImageData(0, offset, canvas.width, Math.min(pageHpx, canvas.height - offset));
+          const sliceCanvas = document.createElement('canvas');
+          sliceCanvas.width = canvas.width;
+          sliceCanvas.height = slice.height;
+          sliceCanvas.getContext('2d').putImageData(slice, 0, 0);
+          const sliceUrl = sliceCanvas.toDataURL('image/png');
+          if (offset > 0) pdf.addPage();
+          const sliceH_mm = (sliceCanvas.height / canvas.width) * (pageWidth - 20);
+          pdf.addImage(sliceUrl, 'PNG', 10, 10, pageWidth - 20, sliceH_mm);
+          offset += pageHpx;
+        }
+      }
+      pdf.save(`${(data?.id || 'mapa')}-${versionId}.pdf`);
+    } catch (e) {
+      console.error('Exportación PDF fallida', e);
+      alert('No se pudo exportar el PDF.');
+    }
+  };
+
   return (
-  <div style={{ position: "relative", height: "calc(100vh - 160px)", minHeight: 560, width: "100%", background: "linear-gradient(135deg, #f6f8fc 80%, #eaf1ff 100%)", borderRadius: 24, padding: 18, border: `1.5px solid ${THEME.panelBorder}`, boxShadow: "0 8px 32px rgba(43,106,214,0.07)" }}>
+  <div ref={mapRef} className="protocol-map" style={{ position: "relative", height: "calc(100vh - 160px)", minHeight: 560, width: "100%", background: "linear-gradient(135deg, #f6f8fc 80%, #eaf1ff 100%)", borderRadius: 24, padding: 18, border: `1.5px solid ${THEME.panelBorder}`, boxShadow: "0 8px 32px rgba(43,106,214,0.07)" }}>
       {showHeader && (
-        <div style={{
+        <div className="protocol-map__header" style={{
           position: "relative",
           marginBottom: 6,
           padding: "16px 16px",
@@ -876,6 +1010,42 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
                   </option>
                 ))}
               </select>
+              {/* Escala del timeline */}
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 6 }}>Escala</span>
+                <button onClick={() => setAutoScale(true)} style={{
+                  border: `1px solid ${autoScale ? THEME.gridStrong : THEME.panelBorder}`,
+                  background: autoScale ? "#eaf1ff" : THEME.panelBg,
+                  color: THEME.text,
+                  borderRadius: 10,
+                  padding: "8px 10px",
+                  cursor: 'pointer'
+                }}>Auto</button>
+                <button onClick={() => { setAutoScale(false); setPxPerWeek(40); }} style={{
+                  border: `1px solid ${!autoScale && pxPerWeek===40 ? THEME.gridStrong : THEME.panelBorder}`,
+                  background: !autoScale && pxPerWeek===40 ? "#f7f2ff" : THEME.panelBg,
+                  color: THEME.text,
+                  borderRadius: 10,
+                  padding: "8px 10px",
+                  cursor: 'pointer'
+                }}>Compacto</button>
+                <button onClick={() => { setAutoScale(false); setPxPerWeek(60); }} style={{
+                  border: `1px solid ${!autoScale && pxPerWeek===60 ? THEME.gridStrong : THEME.panelBorder}`,
+                  background: !autoScale && pxPerWeek===60 ? "#f7f2ff" : THEME.panelBg,
+                  color: THEME.text,
+                  borderRadius: 10,
+                  padding: "8px 10px",
+                  cursor: 'pointer'
+                }}>Medio</button>
+                <button onClick={() => { setAutoScale(false); setPxPerWeek(80); }} style={{
+                  border: `1px solid ${!autoScale && pxPerWeek===80 ? THEME.gridStrong : THEME.panelBorder}`,
+                  background: !autoScale && pxPerWeek===80 ? "#f7f2ff" : THEME.panelBg,
+                  color: THEME.text,
+                  borderRadius: 10,
+                  padding: "8px 10px",
+                  cursor: 'pointer'
+                }}>Amplio</button>
+              </div>
               {((strat && strat.length) || hasLR || hasSR) && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                   <span style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 6 }}>RT</span>
@@ -947,7 +1117,23 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
                   )}
                 </div>
               )}
-            </div>
+              </div>
+              <button onClick={handleExport} title="Exportar PNG" style={{
+                border: `1px solid ${THEME.panelBorder}`,
+                background: THEME.panelBg,
+                color: THEME.text,
+                borderRadius: 10,
+                padding: "8px 12px",
+                cursor: 'pointer'
+              }}>Exportar PNG</button>
+              <button onClick={handleExportPDF} title="Exportar PDF" style={{
+                border: `1px solid ${THEME.panelBorder}`,
+                background: THEME.panelBg,
+                color: THEME.text,
+                borderRadius: 10,
+                padding: "8px 12px",
+                cursor: 'pointer'
+              }}>Exportar PDF</button>
           </div>
         </div>
       )}
@@ -1200,9 +1386,19 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
           targetHandle: null,
         }}
         onNodeClick={(_, node) => {
-          if (node?.data?.kind === "q_mantenimiento") {
-            const ciclo = node.data?.meta?.ciclo || "?";
-            const reg = node.data?.meta?.regimen || {};
+          // Actualizar query param ?focus para deep link
+          if (typeof window !== 'undefined' && node?.id) {
+            try {
+              const url = new URL(window.location.href);
+              url.searchParams.set('focus', node.id);
+              window.history.replaceState({}, '', url);
+            } catch {}
+          }
+          const meta = node?.data?.meta || {};
+          const kind = node?.data?.kind;
+          if (kind === "q_mantenimiento") {
+            const ciclo = meta?.ciclo || "?";
+            const reg = meta?.regimen || {};
             const tox = reg.toxicidades || reg.toxicidades_tipicas || [];
             const items = Array.isArray(tox) ? tox : [];
             setDetail({
@@ -1210,9 +1406,76 @@ export default function ProtocolMap({ data, showHeader = true, showLegend = true
               subt: Array.isArray(reg.farmacos) ? `Fármacos: ${reg.farmacos.join(" · ")}` : "",
               items: items.length ? items : ["Añade \"toxicidades\" en data.versiones[].mantenimiento.ciclos." + ciclo + ".toxicidades para mostrar aquí."]
             });
-          } else {
-            setDetail(null);
+            return;
           }
+          if (kind === 'q_induccion' && meta?.ciclo) {
+            const c = meta.ciclo;
+            const items = [];
+            if (Array.isArray(c.drogas)) {
+              items.push(...c.drogas.map(d => `${d.nombre}${d.dosis ? ` — ${d.dosis}` : ''}${Array.isArray(d.dias) ? ` (días ${d.dias.join(', ')})` : ''}`));
+            }
+            if (Array.isArray(c.toxicidades) && c.toxicidades.length) {
+              items.push('— Toxicidades típicas —');
+              items.push(...c.toxicidades);
+            }
+            setDetail({
+              title: c.titulo || 'Ciclo de inducción',
+              subt: c.descripcion || '',
+              items: items.length ? items : ['Añade "drogas" con dosis y días para más detalle.']
+            });
+            return;
+          }
+          if (kind === 'q_consolidacion' && meta?.evento) {
+            const e = meta.evento;
+            const items = [];
+            if (Array.isArray(e?.drogas)) items.push(...e.drogas.map(d => `${d.nombre}${d.dosis ? ` — ${d.dosis}` : ''}`));
+            if (Array.isArray(e?.toxicidades) && e.toxicidades.length) {
+              items.push('— Toxicidades típicas —');
+              items.push(...e.toxicidades);
+            }
+            setDetail({
+              title: e.titulo || 'Consolidación',
+              subt: e.descripcion || '',
+              items: items.length ? items : []
+            });
+            return;
+          }
+          if ((kind === 'radioterapia' || kind === 'rt_sola' || kind === 'rt_carbo') && meta) {
+            const lines = [];
+            if (meta.riesgo) lines.push(`Riesgo: ${meta.riesgo}${meta.rama ? ` · ${meta.rama}` : ''}`);
+            if (meta.semanas) lines.push(`Semanas: S${meta.semanas.inicio}–S${meta.semanas.fin}`);
+            if (meta.nota) lines.push(meta.nota);
+            // Mostrar toxicidades si están definidas en opcion simple
+            const tox = meta?.opcion?.toxicidades;
+            if (Array.isArray(tox) && tox.length) {
+              lines.push('— Toxicidades típicas —');
+              lines.push(...tox);
+            }
+            setDetail({ title: 'Radioterapia', subt: '', items: lines });
+            return;
+          }
+          if (kind === 'inmunoterapia' && meta) {
+            const ciclo = meta.ciclo || meta;
+            const items = [];
+            if (Array.isArray(ciclo?.farmacos)) items.push(...ciclo.farmacos);
+            if (Array.isArray(ciclo?.toxicidades) && ciclo.toxicidades.length) {
+              items.push('— Toxicidades típicas —');
+              items.push(...ciclo.toxicidades);
+            }
+            setDetail({ title: ciclo?.titulo || 'Inmunoterapia', subt: ciclo?.descripcion || '', items });
+            return;
+          }
+          if (kind === 'trasplante' && meta) {
+            const items = [];
+            if (Array.isArray(meta.detalles)) items.push(...meta.detalles);
+            setDetail({ title: 'Trasplante / Altas dosis', subt: meta.descripcion || '', items });
+            return;
+          }
+          if (kind === 'cirugia' && meta) {
+            setDetail({ title: 'Cirugía', subt: meta.descripcion || '', items: meta.criterios ? [meta.criterios] : [] });
+            return;
+          }
+          setDetail(null);
         }}
       >
         <Background color={THEME.grid} gap={28} />

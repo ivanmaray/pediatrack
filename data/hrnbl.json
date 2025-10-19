@@ -67,7 +67,14 @@
               "offset_weeks": 26
             },
             "duracion_semanas": 2,
-            "nota": "21,6 Gy en 12 fracciones. Considerar boost a 36 Gy si márgenes positivos o enfermedad residual."
+            "nota": "21,6 Gy en 12 fracciones. Considerar boost a 36 Gy si márgenes positivos o enfermedad residual.",
+            "toxicidades": [
+              "Dermatitis/eritema cutáneo en campo de RT",
+              "Fatiga, náuseas/vómitos",
+              "Mucositis y odinofagia (si campo incluye vía aerodigestiva)",
+              "Mielosupresión leve (dependiente de campos)",
+              "Tardías: alteraciones del crecimiento óseo/vertebral y fibrosis de tejidos blandos"
+            ]
           }
         ]
       },
@@ -108,6 +115,13 @@
                   3
                 ]
               }
+            ],
+            "toxicidades": [
+              "Mielosupresión (neutropenia/trombocitopenia)",
+              "Neuropatía periférica/autonómica (vincristina): estreñimiento/íleo",
+              "Náuseas/vómitos y mucositis",
+              "Carboplatino: nefro/ototoxicidad e hipomagnesemia (menos intensa que con cisplatino)",
+              "Etopósido: hipotensión/reacción infusional"
             ]
           },
           {
@@ -138,6 +152,13 @@
                   5
                 ]
               }
+            ],
+            "toxicidades": [
+              "Nefrotoxicidad (requiere hiperhidratación/diuresis forzada)",
+              "Ototoxicidad",
+              "Pérdidas electrolíticas: hipoMg/hipoK/hipoCa",
+              "Náuseas/vómitos intensas",
+              "Neuropatía periférica/autonómica (vincristina)"
             ]
           },
           {
@@ -174,6 +195,13 @@
                   2
                 ]
               }
+            ],
+            "toxicidades": [
+              "Mielosupresión grave con riesgo de fiebre neutropénica",
+              "Cistitis hemorrágica (usar MESNA y alcalinización)",
+              "SIADH (ciclofosfamida/vincristina)",
+              "Neuropatía periférica/autonómica (vincristina)",
+              "Mucositis y náuseas/vómitos"
             ]
           },
           {
@@ -204,6 +232,12 @@
                   5
                 ]
               }
+            ],
+            "toxicidades": [
+              "Iguales a curso B1; vigilar nefro/ototoxicidad acumulada",
+              "Pérdidas electrolíticas (hipoMg/hipoK/hipoCa)",
+              "Náuseas/vómitos",
+              "Neuropatía periférica/autonómica (vincristina)"
             ]
           },
           {
@@ -240,6 +274,12 @@
                   3
                 ]
               }
+            ],
+            "toxicidades": [
+              "Iguales a curso A1; vigilar neuropatía y mielosupresión acumulada",
+              "Náuseas/vómitos y mucositis",
+              "Carboplatino: nefro/ototoxicidad e hipomagnesemia",
+              "Etopósido: hipotensión/reacción infusional"
             ]
           },
           {
@@ -270,6 +310,12 @@
                   5
                 ]
               }
+            ],
+            "toxicidades": [
+              "Iguales a curso B1; alto riesgo de nefro/ototoxicidad acumulada",
+              "Pérdidas electrolíticas marcadas (hipoMg/hipoK/hipoCa)",
+              "Náuseas/vómitos intensas",
+              "Neuropatía periférica/autonómica (vincristina)"
             ]
           },
           {
@@ -306,6 +352,13 @@
                   2
                 ]
               }
+            ],
+            "toxicidades": [
+              "Iguales a curso C1; alto riesgo de mielosupresión y fiebre neutropénica",
+              "Cistitis hemorrágica (usar MESNA)",
+              "SIADH (ciclofosfamida/vincristina)",
+              "Neuropatía periférica/autonómica (vincristina)",
+              "Mucositis y náuseas/vómitos"
             ]
           },
           {
@@ -336,6 +389,12 @@
                   5
                 ]
               }
+            ],
+            "toxicidades": [
+              "Iguales a cursos B previos; monitorizar función renal y audición",
+              "Pérdidas electrolíticas (hipoMg/hipoK/hipoCa)",
+              "Náuseas/vómitos",
+              "Neuropatía periférica/autonómica (vincristina)"
             ]
           }
         ],
@@ -367,6 +426,15 @@
                   5
                 ]
               }
+            ],
+            "toxicidades": [
+              "Mucositis grave y diarrea",
+              "Mielosupresión profunda e infecciones graves",
+              "Hepatotoxicidad: enfermedad veno-oclusiva (VOD/SOS)",
+              "Convulsiones (busulfán) — profilaxis anticonvulsivante obligatoria",
+              "Toxicidad pulmonar/intersticial",
+              "Náuseas/vómitos",
+              "Infertilidad/esterilidad"
             ]
           }
         ]
@@ -374,6 +442,16 @@
       "soporte": {
         "descripcion": "Cuidados transversales imprescindibles durante cada fase.",
         "medidas": [
+          {
+            "titulo": "Aféresis de progenitores CD34+",
+            "descripcion": "Movilización y recolección durante inducción una vez recuperado el recuento; objetivo ≥ 3×10^6/kg.",
+            "tipo": "Procedimiento",
+            "when": {
+              "anchor": "induction_cycle_index",
+              "cycle_index": 3,
+              "offset_weeks": 0
+            }
+          },
           {
             "titulo": "Soporte antiinfeccioso intensivo",
             "descripcion": "G-CSF tras cada ciclo, profilaxis antibiótica en neutropenia, antifúngicos en mucositis grave y vigilancia de catéter.",
@@ -485,7 +563,14 @@
             "when": {
               "anchor": "treatment_start",
               "offset_weeks": 28
-            }
+            },
+            "toxicidades": [
+              "Xerosis y queilitis",
+              "Fotosensibilidad y eritema cutáneo",
+              "Elevación de transaminasas",
+              "Hipertrigliceridemia",
+              "Cefalea y cambios de ánimo"
+            ]
           },
           {
             "titulo": "Ciclo 2: dinutuximab beta + isotretinoína",
@@ -493,7 +578,14 @@
             "when": {
               "anchor": "treatment_start",
               "offset_weeks": 30
-            }
+            },
+            "toxicidades": [
+              "Dolor neuropático intenso (requiere opioides)",
+              "Fiebre y reacciones de hipersensibilidad (rash, broncoespasmo)",
+              "Síndrome de fuga capilar / hipotensión",
+              "Alteraciones electrolíticas (hipoNa, hipoK)",
+              "Toxicidad hematológica leve-moderada"
+            ]
           },
           {
             "titulo": "Ciclo 3: dinutuximab beta + isotretinoína",
@@ -501,7 +593,14 @@
             "when": {
               "anchor": "treatment_start",
               "offset_weeks": 35
-            }
+            },
+            "toxicidades": [
+              "Dolor neuropático intenso",
+              "Fiebre, hipotensión",
+              "Reacciones infusionales/broncoespasmo",
+              "Síndrome de fuga capilar",
+              "Náuseas y fatiga"
+            ]
           },
           {
             "titulo": "Ciclo 4: dinutuximab beta + isotretinoína",
@@ -509,7 +608,14 @@
             "when": {
               "anchor": "treatment_start",
               "offset_weeks": 40
-            }
+            },
+            "toxicidades": [
+              "Dolor neuropático",
+              "Fiebre, hipotensión",
+              "Reacciones de hipersensibilidad",
+              "Alteraciones electrolíticas",
+              "Xerosis por isotretinoína"
+            ]
           },
           {
             "titulo": "Ciclo 5: dinutuximab beta + isotretinoína",
@@ -517,7 +623,14 @@
             "when": {
               "anchor": "treatment_start",
               "offset_weeks": 45
-            }
+            },
+            "toxicidades": [
+              "Dolor neuropático",
+              "Fiebre, hipotensión",
+              "Reacciones infusionales",
+              "Fatiga y náuseas",
+              "Hipertrigliceridemia (ISO)"
+            ]
           },
           {
             "titulo": "Ciclo 6: dinutuximab beta + isotretinoína",
@@ -525,7 +638,14 @@
             "when": {
               "anchor": "treatment_start",
               "offset_weeks": 50
-            }
+            },
+            "toxicidades": [
+              "Dolor neuropático",
+              "Fiebre, hipotensión",
+              "Reacciones de hipersensibilidad",
+              "Síndrome de fuga capilar",
+              "Xerosis y elevación de triglicéridos (ISO)"
+            ]
           }
         ]
       }

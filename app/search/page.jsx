@@ -1,6 +1,7 @@
 import Link from "next/link";
 import data from "@/data/index.json";
 import HomeClient from "@/components/HomeClient.jsx";
+import { Suspense } from "react";
 
 export const revalidate = 60;
 
@@ -103,7 +104,9 @@ export default function SearchPage() {
             <p>Sistema de búsqueda y filtrado para protocolos oncológicos pediátricos. Accede a información estructurada por diagnóstico y especialidad.</p>
           </section>
 
-          <HomeClient initialData={data && Array.isArray(data) ? data : []} onlySearch={true} />
+          <Suspense fallback={<div className="container"><p>Cargando buscador…</p></div>}>
+            <HomeClient initialData={data && Array.isArray(data) ? data : []} onlySearch={true} />
+          </Suspense>
         </div>
       </main>
     </>

@@ -20,7 +20,7 @@
       }
     ]
   },
-  "fuentes": ["/data/fuentes/siop-pnet5-medulloblastoma.pdf"],
+  "fuentes": ["/data/fuentes/4 años o mas_BR_RE_ PNET 5 MB_2014.pdf"],
   "versiones": [
     {
       "id": "v11-2014",
@@ -59,7 +59,11 @@
           "id": "eval4",
           "momento": "final",
           "descripcion": "≈6 semanas tras el último curso de mantenimiento: RM craneal.",
-          "when": { "anchor": "treatment_end", "offset_weeks": 6 }
+          "when": [
+            { "anchor": "mtto_cycle_index", "cycle_index": 5, "offset_weeks": 6 },
+            { "anchor": "mtto_cycle_index", "cycle_index": 7, "offset_weeks": 6 },
+            { "anchor": "treatment_end", "offset_weeks": 6 }
+          ]
         }
       ],
       "cirugia": {
@@ -173,8 +177,58 @@
         "descripcion": "Mantenimiento comienza 6 semanas tras finalizar RT.",
         "inicio_relativo": { "anchor": "rt_end", "offset_weeks": 6 },
         "planes": {
-          "lr": { "orden": ["A","B","A","B","A","B"] },
-          "sr": { "orden": ["A","B","A","B","A","B","A","B"] }
+          "lr": { "orden": ["A","B","A","B","A","B"], "intervalo_semanas": 7 },
+          "sr": { "orden": ["A","B","A","B","A","B","A","B"], "intervalo_semanas": 3 }
+        },
+        "dose_modificaciones": {
+          "cisplatin": {
+            "gfr_thresholds": {
+              "use_caution_if_gfr_lt_ml_per_min_1_73m2": 80,
+              "do_not_give_if_gfr_lt_ml_per_min_1_73m2": 60
+            },
+            "actions": "Estimar GFR antes de cada curso A (cisplatino). Si GFR 60-80 ml/min/1.73m2 repetir estimación/isótopo; si <60 contactar coordinador nacional y considerar sustitución o reducción de dosis según protocolo local."
+          },
+          "carboplatin": {
+            "max_total_doses": 30,
+            "do_not_administer_if_no_rt_that_day": true,
+            "weight_monitoring": "Documento de peso semanal durante RT+carboplatino para cálculo de dosis y registro de administración."
+          },
+          "vincristine": {
+            "notes": "Reducir u omitir ante neuropatía periférica de grado ≥2. Dosis tope única sugerida 2 mg (según práctica local)."
+          }
+        ,
+        "hematologica": {
+          "pre_course_start_thresholds": {
+            "wbc_lt_x10_9_per_l": 2,
+            "neutrophils_lt_x10_9_per_l": 0.5,
+            "platelets_lt_x10_9_per_l": 100,
+            "action": "Retrasar quimioterapia al menos 1 semana si cualquiera de los umbrales se incumple."
+          },
+          "nadir_after_course": {
+            "wbc_lt_x10_9_per_l": 0.5,
+            "neutrophils_lt_x10_9_per_l": 0.05,
+            "platelets_lt_x10_9_per_l": 30,
+            "actions": {
+              "platelet_wbc_recovery": "Omitir CCNU en el siguiente ciclo; si demora >2 semanas reducir CCNU a 50 mg/m2 en todos los ciclos subsiguientes.",
+              "recurrent_episode": "Si nuevo episodio tras reducción u omisión: omitir CCNU en el siguiente y en todos los subsiguientes (mantener cisplatino a dosis plena inicialmente).",
+              "severe_or_recurrent": "Reducir cisplatino a 50 mg/m2 en el siguiente y todos los cursos subsiguientes si episodios repetidos o neutropenia grave tras fiebre neutropénica."
+            }
+          },
+          "platelet_actions": {
+            "transfusion_threshold": 25,
+            "clinical_transfusion_threshold_note": "Plaquetas transfundir según clínica o cuando ≤25 x10^9/L; para decisiones locales."
+          }
+        },
+        "gcsf_guidelines": {
+          "monitoring_days": ["Monday","Wednesday","Friday"],
+          "weekend_strategy": "Si ANC ≤1000/µL el viernes → administrar G-CSF (5 mcg/kg/día) viernes-sábado-domingo, después de la sesión de RT del viernes.",
+          "weekday_rules": {
+            "monday_or_wednesday_if_anc_lt_500": "Administrar G-CSF ese día y el día siguiente tras RT.",
+            "monday_or_wednesday_if_anc_gte_500": "No administrar G-CSF.",
+            "no_escalation": "No escalar dosis de G-CSF por neutropenia aislada; en infección potencialmente vital aumentar a 5 mcg/kg 2x/día."
+          },
+          "notes": "Familiares pueden ser instruidos para administrar G-CSF en domicilio; no administrar G-CSF hasta después de la RT del viernes."
+        }
         },
         "LR": { "ciclos_totales": 6, "orden": ["A","B","A","B","A","B"] },
         "SR": { "ciclos_totales": 8, "orden": ["A","B","A","B","A","B","A","B"] },
@@ -186,8 +240,21 @@
       "investigaciones": {
         "antes_de_cada_curso": [
           "Historia, exploración, ECOG/Karnofsky pediátrico",
-          "Hemograma y bioquímica (urea/creatinina, electrolitos, transaminasas, FA, bilirrubina, albúmina, Mg, Ca, fosfato)"
+          "Hemograma y bioquímica (urea/creatinina, electrolitos, transaminasas, FA, bilirrubina, albúmina, Mg, Ca, fosfato)",
+          "Audiometría (Pure-tone audiometry con conducción ósea/aire y timpanograma) antes de cada curso que incluya cisplatino o carboplatino. Si no es posible, OAE (otoacoustic emissions) son aceptables.",
+          "Estimación de la Tasa de Filtración Glomerular (GFR) antes de cada curso que incluya cisplatino/carboplatino (según práctica local).",
+          "Documentar peso semanalmente durante radioterapia con carboplatino para cálculo de dosis y registro de administración."
         ],
+        "audiometria": {
+          "threshold_db": 20,
+          "threshold_definition": "Pérdida neurosensorial ≥20 dB en 1-3 kHz (mejor oído).",
+          "note": "Pure-tone audiometry antes de cada curso con cisplatino/carboplatino; si no es posible, OAE aceptable."
+        },
+        "gfr_thresholds": {
+          "caution_ml_per_min_1_73m2": 80,
+          "hold_or_contact_if_less_than_ml_per_min_1_73m2": 60,
+          "note": "Si GFR entre 60-80 repetir estimación/isótopo; si GFR <60 contactar coordinador nacional."
+        },
         "antes_de_cursos_alternos": [
           "Audiometría obligatoria antes de cursos con cisplatino/carboplatino",
           "GFR estimado antes de cursos con cisplatino"
@@ -220,12 +287,48 @@
             },
             {
               "momento": "fin_tratamiento",
-              "when": { "anchor": "treatment_end", "offset_weeks": 6 },
+              "when": [
+                { "anchor": "mtto_cycle_index", "cycle_index": 5, "offset_weeks": 6 },
+                { "anchor": "mtto_cycle_index", "cycle_index": 7, "offset_weeks": 6 },
+                { "anchor": "treatment_end", "offset_weeks": 6 }
+              ],
               "pruebas": [
                 { "tipo": "RM", "subtipo": "craneal", "region": "cerebro", "nota": "≈6 semanas tras último curso" }
               ]
             }
           ]
+        ,
+        "imagen_qaq": {
+          "central_review_mandatory": true,
+          "early_postop_timing_hours": 72,
+          "cranial_mri": {
+            "plane": "axial (aligned to AC-PC)",
+            "max_slice_thickness_mm": 4,
+            "matrix_recommendation": "256 (or 512) for brain; 512 for spine",
+            "fov_mm": { "brain": 230, "spine_max": 350 },
+            "sequences_1_5T": ["Axial T2", "PD or FLAIR", "Coronal FLAIR", "Axial T1 -/+ contrast", "Coronal and sagittal T1 -/+ contrast", "Axial DWI with ADC (3 directions; b=1000)"],
+            "sequences_3T_notes": "Prefer 3D-gradient echo T1 +/- contrast; add T1-SE/T1-gradient echo/T1-IR if possible; avoid changing sequence selection during follow-up.",
+            "optional_sequences": ["3D gradient echo T1 + contrast", "Perfusion", "MRS", "DTI"]
+          },
+          "spinal_mri": {
+            "avoid_3T": true,
+            "sagittal_postcontrast_t1_required": true,
+            "sagittal_slice_thickness_mm_max": 3,
+            "axial_slices_without_gaps_for_suspicious_areas": true,
+            "fat_suppression_note": "Avoid routine fat suppression for spinal meningeal disease (may cause artifacts)."
+          },
+          "measurement": {
+            "measure_in_three_planes": true,
+            "volume_formula_note": "Tumour volume may be approximated as a*b*c/2; D-volume optional."
+          },
+          "submission_and_qc": {
+            "dicom_rt_compatible": true,
+            "submission_options": ["electronic","courier"],
+            "national_qc_turnaround_hours": 72,
+            "national_qc_org": "Each National Group appoints a National Radiotherapy Coordinator and a small QC panel. Submitted films/plans will be assessed and returned within 72 hours or result communicated by fax/email.",
+            "qa_reporting": "QC committees meet thrice yearly; annual report sent to National Study Coordinator, International Radiotherapy Coordinator and International Data Centre."
+          }
+        }
         },
         "seguimiento_post": "RM craneal cada 4 meses el 1er año; al menos cada 6 meses el 2º año; y anual hasta 5 años. En sospecha de recaída: RM espinal y considerar citología LCR."
       },

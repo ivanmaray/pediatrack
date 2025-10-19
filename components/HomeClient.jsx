@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
 async function loadProtocol(id) {
@@ -110,13 +111,17 @@ const DOMAIN_OPTIONS = [
 const DOMAIN_ORDER = ["solid", "hemato", "otros"];
 
 export default function HomeClient({ initialData, onlySearch = false }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const metaData = Array.isArray(initialData) ? initialData : [];
   const [q, setQ] = useState("");
   const [activeArea, setActiveArea] = useState("");
   const [activeDomain, setActiveDomain] = useState("todos");
   const [fullProtocols, setFullProtocols] = useState([]);
   const searchRef = useRef(null);
+  const sectionRef = useRef(null);
   const dq = useDebouncedValue(q, 200);
+  const [recentSearches, setRecentSearches] = useState([]);
 
   useEffect(() => {
     const load = async () => {
@@ -130,6 +135,39 @@ export default function HomeClient({ initialData, onlySearch = false }) {
     };
     load();
   }, [metaData]);
+
+  // Telemetría simple en localStorage
+  const logEvent = (type, payload = {}) => {
+    try {
+      const key = 'pt.telemetry';
+      const arr = JSON.parse(localStorage.getItem(key) || '[]');
+      arr.push({ t: Date.now(), type, ...payload });
+      localStorage.setItem(key, JSON.stringify(arr.slice(-200)));
+    } catch {}
+  };
+
+  useEffect(() => {
+    // cargar recientes al montar
+    try {
+      const raw = localStorage.getItem('pt.recentSearches');
+      if (raw) setRecentSearches(JSON.parse(raw));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    // guardar términos de búsqueda recientes tras debounce
+    if (!onlySearch) return;
+    const term = dq.trim();
+    if (!term) return;
+    try {
+      const raw = localStorage.getItem('pt.recentSearches');
+      const arr = raw ? JSON.parse(raw) : [];
+      const next = [term, ...arr.filter(x => x !== term)].slice(0, 8);
+      localStorage.setItem('pt.recentSearches', JSON.stringify(next));
+      setRecentSearches(next);
+      logEvent('search', { q: term, area: activeArea, domain: activeDomain });
+    } catch {}
+  }, [dq]);
 
   const data = fullProtocols.length ? fullProtocols : metaData;
 
@@ -174,6 +212,44 @@ export default function HomeClient({ initialData, onlySearch = false }) {
     if (activeDomain === "todos") return sorted;
     return sorted.filter((area) => (areaToDomain.get(area) || "otros") === activeDomain);
   }, [allAreas, activeDomain, areaToDomain]);
+
+  // Coincidencias de diagnósticos según lo escrito en la barra de búsqueda (home)
+  const areaMatches = useMemo(() => {
+    const term = dq.trim().toLowerCase();
+    const base = filteredAreas;
+    if (!term) return base.slice(0, 16);
+    return base.filter((a) => a.toLowerCase().includes(term)).slice(0, 16);
+  }, [filteredAreas, dq]);
+
+  // Leer parámetros de la URL en modo búsqueda para prefiltrar
+  useEffect(() => {
+    if (!onlySearch || !searchParams) return;
+    const domainParam = searchParams.get("domain");
+    const areaParam = searchParams.get("area");
+    const qParam = searchParams.get("q");
+    if (domainParam && ["todos","solid","hemato","otros"].includes(domainParam)) {
+      setActiveDomain(domainParam);
+    }
+    if (areaParam) {
+      setActiveArea(areaParam);
+    }
+    if (qParam) {
+      setQ(qParam);
+    }
+    // Solo a la carga inicial
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onlySearch, searchParams]);
+
+  // Persistir filtros en la URL para compartir estado
+  useEffect(() => {
+    if (!onlySearch || !router) return;
+    const params = new URLSearchParams();
+    if (activeDomain && activeDomain !== 'todos') params.set('domain', activeDomain);
+    if (activeArea) params.set('area', activeArea);
+    if (dq) params.set('q', dq);
+    const qs = params.toString();
+    router.replace(qs ? `/search?${qs}` : `/search`);
+  }, [onlySearch, router, dq, activeArea, activeDomain]);
 
   const totalProtocols = data.length;
   const totalAreas = useMemo(() => allAreas.length, [allAreas]);
@@ -296,6 +372,19 @@ export default function HomeClient({ initialData, onlySearch = false }) {
 
   const isFiltering = Boolean(q || activeArea || activeDomain !== "todos");
 
+  // Desplazar vista al bloque de resultados cuando cambian filtros o búsqueda
+  const prevFiltersRef = useRef({ q: "", area: "", domain: "todos" });
+  useEffect(() => {
+    if (!onlySearch) return;
+    const prev = prevFiltersRef.current;
+    const changed = prev.q !== dq || prev.area !== activeArea || prev.domain !== activeDomain;
+    prevFiltersRef.current = { q: dq, area: activeArea, domain: activeDomain };
+    if (!changed) return;
+    if (sectionRef.current && (dq || activeArea || activeDomain !== "todos")) {
+      sectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [dq, activeArea, activeDomain, onlySearch]);
+
   const highlight = (text, query) => {
     if (!query) return text;
     const normText = String(text);
@@ -313,33 +402,121 @@ export default function HomeClient({ initialData, onlySearch = false }) {
     );
   };
 
+  // Home index de diagnósticos (sin buscador): muestra áreas y, al clicar, despliega sus protocolos
+  const areasFromData = useMemo(() => {
+    return Array.from(new Set((data || []).map(p => p.area).filter(Boolean)));
+  }, [data]);
+  const PREFERRED_ORDER = [
+    "Leucemia linfoblástica aguda",
+    "Linfoma de Hodgkin",
+    "Meduloblastoma",
+    "Neuroblastoma",
+    "Tumor de Wilms",
+    "Sarcomas de partes blandas",
+    "Sarcomas óseos",
+    "Gliomas de bajo grado",
+    "Gliomas de alto grado"
+  ];
+  const orderedAreas = useMemo(() => {
+    return [...areasFromData].sort((a, b) => {
+      const ia = PREFERRED_ORDER.indexOf(a);
+      const ib = PREFERRED_ORDER.indexOf(b);
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      if (ia !== -1) return -1;
+      if (ib !== -1) return 1;
+      return a.localeCompare(b, 'es');
+    });
+  }, [areasFromData]);
+  const byArea = useMemo(() => {
+    const m = new Map();
+    (data || []).forEach(p => {
+      const area = p.area || DEFAULT_AREA;
+      if (!m.has(area)) m.set(area, []);
+      m.get(area).push(p);
+    });
+    return m;
+  }, [data]);
+  const [openArea, setOpenArea] = useState("");
+
   return (
     <main className="container page-shell">
       <div className="home">
         {!onlySearch && (
-          <section className="hero-card" aria-labelledby="hero-title">
-            <div className="hero-card__content">
-              <span className="hero-card__eyebrow">Herramientas para oncología y hematología pediátrica</span>
-              <h1 id="hero-title">Consulta de protocolos médicos</h1>
-              <p className="hero-card__lead">
-                Sistema de consulta estructurada para protocolos oncológicos pediátricos, diseñado para facilitar el acceso rápido a información clínica validada.
-              </p>
-              <div className="hero-card__stats">
-                <span className="stat-pill">{totalProtocols} protocolos disponibles</span>
-                <span className="stat-pill">{domainCoverage.solid} áreas de tumores sólidos</span>
-                <span className="stat-pill">{domainCoverage.hemato} áreas hematológicas</span>
+          <>
+            <section className="hero hero--center" aria-labelledby="hero-title">
+              <div className="hero__brand">
+                <img src="/pediatrack-mark.svg" alt="" width="40" height="40" aria-hidden="true" />
+                <span className="eyebrow">Oncología y Hematología pediátricas</span>
               </div>
-              <div className="hero-actions">
-                <Link href="/search" className="cta-button--large">
-                  Explorar protocolos
-                </Link>
+              <h1 id="hero-title">Mapas terapéuticos, precisos y accionables</h1>
+              <p className="hero__lead">Explora protocolos onco-hematológicos por patología. Visualiza fases y ciclos con tiempos y dosis, listos para la práctica clínica y los comités.</p>
+              <ul className="hero__bullets" aria-label="Ventajas clave">
+                <li>Inducción, consolidación, RT e inmuno</li>
+                <li>Exportación a PNG/PDF</li>
+                <li>Enlaces compartibles con estado</li>
+              </ul>
+              <div className="quick-links" aria-label="Incluye">
+                <span className="chip" aria-hidden="true">Incluye:</span>
+                <span className="chip">Evaluaciones</span>
+                <span className="chip">Quimioterapia</span>
+                <span className="chip">Inmunoterapia</span>
+                <span className="chip">Radioterapia</span>
+                <span className="chip">Trasplante (TPH)</span>
+                <span className="chip">Seguimiento</span>
               </div>
-            </div>
-          </section>
+            </section>
+
+            <section aria-labelledby="oncop-title">
+              <header style={{textAlign: 'center', marginBottom: 12}}>
+                <h2 id="oncop-title" style={{margin: 0}}>Elige una patología onco-hematológica</h2>
+                <p className="hero__lead" style={{marginTop: 4}}>Haz clic en un diagnóstico para ver los protocolos disponibles.</p>
+              </header>
+              {DOMAIN_ORDER.map((domainKey) => {
+                const title = DIAG_GROUPS[domainKey]?.label || (domainKey === 'hemato' ? 'Hematología oncológica' : domainKey === 'solid' ? 'Tumores sólidos pediátricos' : 'Protocolos transversales y soporte');
+                const areasForDomain = orderedAreas.filter(a => (areaToDomain.get(a) || inferDomain(a)) === domainKey);
+                if (areasForDomain.length === 0) return null;
+                return (
+                  <div key={domainKey} className="domain-section">
+                    <h3 className="domain-section__title" style={{ margin: '16px 8px' }}>{title}</h3>
+                    <ul className="protocol-grid" aria-label={`Diagnósticos · ${title}`}>
+                    {areasForDomain.map((area) => {
+                const count = byArea.get(area)?.length || 0;
+                const expanded = openArea === area;
+                return (
+                  <li key={area}>
+                    <button
+                      type="button"
+                      className="protocol-card"
+                      aria-expanded={expanded}
+                      onClick={() => setOpenArea(expanded ? "" : area)}
+                      style={{ textAlign: 'left', width: '100%', cursor: 'pointer' }}
+                    >
+                      <div className="protocol-card__meta">
+                        <span>{area}</span>
+                      </div>
+                      <p className="protocol-card__title">{count} protocolo{count === 1 ? '' : 's'}</p>
+                      <div className="tag-row">
+                        <span className="badge">Ver protocolos</span>
+                      </div>
+                    </button>
+                    {expanded && (
+                      <div style={{ marginTop: 8 }}>
+                        <Grid protocolos={byArea.get(area) || []} highlight={(x)=>x} query={""} />
+                      </div>
+                    )}
+                  </li>
+                    );
+                  })}
+                    </ul>
+                  </div>
+                );
+              })}
+            </section>
+          </>
         )}
 
         {onlySearch && (
-          <section id="protocolos" className="search-panel" aria-label="Buscador de protocolos">
+          <section id="protocolos" ref={sectionRef} className="search-panel" aria-label="Buscador de protocolos">
             <div className="search-panel__heading">
               <h2>🔍 Búsqueda avanzada de protocolos</h2>
               <div className="search-summary">
@@ -365,6 +542,12 @@ export default function HomeClient({ initialData, onlySearch = false }) {
                       setQ("");
                       setActiveArea("");
                       setActiveDomain("todos");
+                      try {
+                        const key = 'pt.telemetry';
+                        const arr = JSON.parse(localStorage.getItem(key) || '[]');
+                        arr.push({ t: Date.now(), type: 'filters_reset' });
+                        localStorage.setItem(key, JSON.stringify(arr.slice(-200)));
+                      } catch {}
                     }}
                     aria-label="Restablecer todos los filtros"
                   >
@@ -373,6 +556,68 @@ export default function HomeClient({ initialData, onlySearch = false }) {
                 )}
               </div>
             </div>
+
+            {(q || activeArea || activeDomain !== "todos") && (
+              <div className="active-filters" role="list" aria-label="Filtros activos">
+                {q && (
+                  <span className="active-chip" role="listitem">
+                    "{dq}"
+                    <button
+                      type="button"
+                      className="active-chip__remove"
+                      aria-label="Quitar filtro de búsqueda"
+                      onClick={() => {
+                        setQ("");
+                        try {
+                          const key = 'pt.telemetry';
+                          const arr = JSON.parse(localStorage.getItem(key) || '[]');
+                          arr.push({ t: Date.now(), type: 'filter_remove', key: 'q' });
+                          localStorage.setItem(key, JSON.stringify(arr.slice(-200)));
+                        } catch {}
+                      }}
+                    >×</button>
+                  </span>
+                )}
+                {activeDomain !== "todos" && (
+                  <span className="active-chip" role="listitem">
+                    {DOMAIN_OPTIONS.find(d => d.id === activeDomain)?.label || activeDomain}
+                    <button
+                      type="button"
+                      className="active-chip__remove"
+                      aria-label="Quitar filtro de categoría"
+                      onClick={() => {
+                        setActiveDomain("todos");
+                        try {
+                          const key = 'pt.telemetry';
+                          const arr = JSON.parse(localStorage.getItem(key) || '[]');
+                          arr.push({ t: Date.now(), type: 'filter_remove', key: 'domain' });
+                          localStorage.setItem(key, JSON.stringify(arr.slice(-200)));
+                        } catch {}
+                      }}
+                    >×</button>
+                  </span>
+                )}
+                {activeArea && (
+                  <span className="active-chip" role="listitem">
+                    {activeArea}
+                    <button
+                      type="button"
+                      className="active-chip__remove"
+                      aria-label="Quitar filtro de área"
+                      onClick={() => {
+                        setActiveArea("");
+                        try {
+                          const key = 'pt.telemetry';
+                          const arr = JSON.parse(localStorage.getItem(key) || '[]');
+                          arr.push({ t: Date.now(), type: 'filter_remove', key: 'area' });
+                          localStorage.setItem(key, JSON.stringify(arr.slice(-200)));
+                        } catch {}
+                      }}
+                    >×</button>
+                  </span>
+                )}
+              </div>
+            )}
             <form
               role="search"
               aria-label="Buscar protocolo"
@@ -416,6 +661,22 @@ export default function HomeClient({ initialData, onlySearch = false }) {
                     )}
                   </div>
                 </div>
+                {recentSearches.length > 0 && (
+                  <div className="recent-searches" role="list" aria-label="Búsquedas recientes" style={{marginTop: 8}}>
+                    <span className="chip-label">Recientes:</span>
+                    <div className="chip-group">
+                      {recentSearches.map((term) => (
+                        <button
+                          key={term}
+                          type="button"
+                          className="chip"
+                          role="listitem"
+                          onClick={() => setQ(term)}
+                        >{term}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="filters-section">
@@ -431,6 +692,12 @@ export default function HomeClient({ initialData, onlySearch = false }) {
                         onClick={() => {
                           setActiveDomain(option.id);
                           setActiveArea("");
+                          try {
+                            const key = 'pt.telemetry';
+                            const arr = JSON.parse(localStorage.getItem(key) || '[]');
+                            arr.push({ t: Date.now(), type: 'filter_domain', domain: option.id });
+                            localStorage.setItem(key, JSON.stringify(arr.slice(-200)));
+                          } catch {}
                         }}
                       >
                         <strong>{option.label}</strong>
@@ -450,7 +717,15 @@ export default function HomeClient({ initialData, onlySearch = false }) {
                     <div className="chip-group" role="group" aria-label="Filtrar por diagnóstico">
                       <button
                         type="button"
-                        onClick={() => setActiveArea("")}
+                        onClick={() => {
+                          setActiveArea("");
+                          try {
+                            const key = 'pt.telemetry';
+                            const arr = JSON.parse(localStorage.getItem(key) || '[]');
+                            arr.push({ t: Date.now(), type: 'filter_area', area: '' });
+                            localStorage.setItem(key, JSON.stringify(arr.slice(-200)));
+                          } catch {}
+                        }}
                         className={`chip ${activeArea === "" ? "chip--active" : ""}`}
                         aria-pressed={activeArea === ""}
                       >
@@ -460,7 +735,15 @@ export default function HomeClient({ initialData, onlySearch = false }) {
                         <button
                           key={area}
                           type="button"
-                          onClick={() => setActiveArea(area)}
+                          onClick={() => {
+                            setActiveArea(area);
+                            try {
+                              const key = 'pt.telemetry';
+                              const arr = JSON.parse(localStorage.getItem(key) || '[]');
+                              arr.push({ t: Date.now(), type: 'filter_area', area });
+                              localStorage.setItem(key, JSON.stringify(arr.slice(-200)));
+                            } catch {}
+                          }}
                           className={`chip ${activeArea === area ? "chip--active" : ""}`}
                           aria-pressed={activeArea === area}
                         >
@@ -473,25 +756,37 @@ export default function HomeClient({ initialData, onlySearch = false }) {
               </div>
             </form>
 
-            {isFiltering ? (
-              protocolos.length ? (
-                <Grid protocolos={protocolos} highlight={highlight} query={dq} />
-              ) : (
-                <div className="empty-state" role="status">
-                  <strong>No encontramos resultados.</strong>
-                  <span>
-                    Ajusta el tipo de patología o modifica la búsqueda para localizar el protocolo que necesitas.
-                  </span>
-                </div>
-              )
-            ) : (
-              <div className="empty-state" role="note">
-                <strong>¿No sabes por dónde empezar?</strong>
-                <span>
-                  Selecciona la categoría de patología o revisa más abajo las áreas integradas por tumores sólidos, hematología y soporte.
-                </span>
-              </div>
-            )}
+             {isFiltering ? (
+               protocolos.length ? (
+                 <Grid protocolos={protocolos} highlight={highlight} query={dq} />
+               ) : (
+                 <div className="empty-state" role="status" aria-live="polite">
+                   <h3>No encontramos resultados.</h3>
+                   <p>Prueba a:</p>
+                   <ul>
+                     <li>Buscar por patología ("neuroblastoma", "meduloblastoma", "Hodgkin").</li>
+                     <li>Limpiar filtros o cambiar de categoría.</li>
+                     <li>Usar siglas: HRNBL, PNET5, LLA.</li>
+                   </ul>
+                   <div className="quick-examples">
+                     <span>Ejemplos rápidos:</span>
+                     <div className="quick-picker__chips">
+                       <button type="button" className="chip" onClick={() => setQ('neuroblastoma')}>neuroblastoma</button>
+                       <button type="button" className="chip" onClick={() => setQ('meduloblastoma')}>meduloblastoma</button>
+                       <button type="button" className="chip" onClick={() => setQ('Hodgkin')}>Hodgkin</button>
+                       <button type="button" className="chip" onClick={() => setQ('PNET5')}>PNET5</button>
+                     </div>
+                   </div>
+                 </div>
+               )
+             ) : (
+               <div className="empty-state" role="note">
+                 <strong>¿No sabes por dónde empezar?</strong>
+                 <span>
+                   Selecciona la categoría de patología o revisa más abajo las áreas integradas por tumores sólidos, hematología y soporte.
+                 </span>
+               </div>
+             )}
           </section>
         )}
 
@@ -514,112 +809,22 @@ export default function HomeClient({ initialData, onlySearch = false }) {
           </section>
         )}
 
-        {!onlySearch && (
-          <section id="telemetria" className="insights-panel" aria-label="Resumen técnico de datos">
-            <div className="insights-header">
-              <h2>Telemetría del dataset</h2>
-              <p>Instantánea generada a partir de los archivos JSON integrados en la build.</p>
-            </div>
-            <div className="insights-grid">
-              <article className="insight-card">
-                <span className="insight-card__label">Versiones publicadas</span>
-                <span className="insight-card__value">{totalVersiones}</span>
-                <span className="insight-card__footnote">
-                  Conteo de las variaciones de protocolo disponibles para revisión.
-                </span>
-              </article>
-              <article className="insight-card">
-                <span className="insight-card__label">Estrategias de riesgo</span>
-                <span className="insight-card__value">{totalEstrategias}</span>
-                <span className="insight-card__footnote">
-                  Modalidades LR/SR y ramas experimentales identificadas por protocolo.
-                </span>
-              </article>
-              <article className="insight-card">
-                <span className="insight-card__label">Cobertura de radioterapia</span>
-                <span className="insight-card__value">
-                  {coverage.totals.radioterapia}/{totalProtocols}
-                </span>
-                <span className="insight-card__footnote">
-                  Protocolos con planificación de RT diferenciada por riesgo o rama.
-                </span>
-              </article>
-              <article className="insight-card">
-                <span className="insight-card__label">Trayectos multidisciplina</span>
-                <span className="insight-card__value">{multiDisplay}</span>
-                <span className="insight-card__footnote">
-                  Quimioterapia + inmunoterapia respecto al máximo esperable por protocolo.
-                </span>
-              </article>
-            </div>
+        {false && (
+          <section className="featured" aria-label="Protocolos destacados">
+            <header className="section-header">
+              <h2>Destacados</h2>
+            </header>
+            <Grid protocolos={data.slice(0, 4)} highlight={highlight} query={""} />
           </section>
         )}
 
-        {!onlySearch && (
-          <section id="pipeline" className="tech-section" aria-label="Arquitectura y pipeline clínico">
-            <div className="tech-section__grid">
-              <div>
-                <h2>Arquitectura de visualización</h2>
-                <p className="tech-section__lead">
-                  Cada mapa se renderiza en cliente mediante React Flow, sincronizado con el motor temporal de Pediatrack.
-                  El runtime usa Next.js 14 (app router) con revalidación de 60 segundos, asegurando que las actualizaciones
-                  de JSON lleguen sin despliegues manuales.
-                </p>
-                <ul className="timeline-list tech-section__timeline">
-                  <li className="timeline-item">
-                    <span className="timeline-item__title">1. Parsing de protocolos</span>
-                    <p className="timeline-item__descr">
-                      `getProtocol` resuelve el fichero respetando el casing para evitar fallos en ambientes Linux/macOS.
-                    </p>
-                  </li>
-                  <li className="timeline-item">
-                    <span className="timeline-item__title">2. Resolución de anclas</span>
-                    <p className="timeline-item__descr">
-                      Los anchors (`rt_start`, `mtto_cycle_index`) se transforman en semanas absolutas para dibujar la línea temporal.
-                    </p>
-                  </li>
-                  <li className="timeline-item">
-                    <span className="timeline-item__title">3. Render adaptativo</span>
-                    <p className="timeline-item__descr">
-                      El visor alterna entre timeline clínico y mapa interactivo según la necesidad del comité oncológico.
-                    </p>
-                  </li>
-                </ul>
-              </div>
-              <div>
-                <h2>Checklist de completitud clínica</h2>
-                <div className="schema-card">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Recurso</th>
-                        <th>Protocolos cubiertos</th>
-                        <th>Notas</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {coverage.keys.map((key) => (
-                        <tr key={key}>
-                          <td><code>{key}</code></td>
-                          <td>{coverage.totals[key]} / {totalProtocols}</td>
-                          <td>
-                            {coverage.totals[key] === totalProtocols
-                              ? "Presente en todos los protocolos"
-                              : "Pendiente de completar en algunos archivos"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
+        {/* Telemetría y sección técnica eliminadas de la home para un diseño más limpio */}
+
+        {/* Secciones técnicas y checklist retiradas de la home */}
 
         {!onlySearch && (
           <footer className="page-footer">
-            © {new Date().getFullYear()} Pediatrack — prototipado clínico. Esta demo no sustituye a la práctica clínica ni a los documentos oficiales del protocolo.
+            © {new Date().getFullYear()} Pediatrack. Uso demostrativo; no sustituye documentos oficiales.
           </footer>
         )}
       </div>
@@ -636,6 +841,14 @@ function Grid({ protocolos, highlight, query }) {
             href={`/protocolo/${p.id}`}
             className="protocol-card"
             aria-label={`Ver protocolo ${p.titulo || p.nombre || p.id}`}
+            onClick={() => {
+              try {
+                const key = 'pt.telemetry';
+                const arr = JSON.parse(localStorage.getItem(key) || '[]');
+                arr.push({ t: Date.now(), type: 'open_protocol', id: p.id });
+                localStorage.setItem(key, JSON.stringify(arr.slice(-200)));
+              } catch {}
+            }}
           >
             <div className="protocol-card__meta">
               <span>{highlight(p.area || DEFAULT_AREA, query)}</span>
