@@ -7,19 +7,53 @@ export default function ProtocolMatrix({ data, selectedStratId }) {
   const { rows, totalWeeks, laneDetails } = useMemo(() => {
     const versiones = Array.isArray(data.versiones) ? data.versiones : [];
     const base = versiones[0] || {};
-  const qtx = base.quimioterapia || {};
+    const qtx = base.quimioterapia || {};
     const rt = base.radioterapia || {};
-    const evals = Array.isArray(base.evaluacion) ? base.evaluacion : [];
+  const evals = Array.isArray(base.evaluacion) ? base.evaluacion : [];
     const inmuno = base.inmunoterapia || {};
     const txp = base.trasplante || {};
     const soporte = base.soporte || {};
     const prof = base.profilaxis || {};
     const seg = base.seguimiento || {};
     const induccionInterval = Number(qtx.induccion_intervalo_semanas || 2);
-    const induccion = Array.isArray(qtx.induccion) ? qtx.induccion : [];
+    // Helper to filter items by selected stratification
+    const matchesStrat = (obj) => {
+      const sel = (selectedStratId || '').toLowerCase();
+      if (!obj || typeof obj !== 'object') return true;
+      const only = (obj.only_strats || obj.estratos || obj.strats);
+      if (Array.isArray(only) && only.length) {
+        return only.map(String).map(s=>s.toLowerCase()).includes(sel);
+      }
+      const exclude = obj.exclude_strats;
+      if (Array.isArray(exclude) && exclude.length) {
+        return !exclude.map(String).map(s=>s.toLowerCase()).includes(sel);
+      }
+      return true;
+    };
+    const induccion = (Array.isArray(qtx.induccion) ? qtx.induccion : []).filter(matchesStrat);
+    const consArr = (Array.isArray(qtx.consolidacion) ? qtx.consolidacion : (qtx.consolidacion ? [qtx.consolidacion] : [])).filter(matchesStrat);
     const mtto = base.mantenimiento || {};
-    const stratGroup = selectedStratId && selectedStratId.toLowerCase().startsWith('lr') ? 'lr' : 'sr';
-    const plannedOrden = qtx.planes && qtx.planes[stratGroup] && Array.isArray(qtx.planes[stratGroup].orden) ? qtx.planes[stratGroup].orden : null;
+    const pickStratKey = () => {
+      const planes = qtx.planes || {};
+      const keys = Object.keys(planes).map(k => k.toLowerCase());
+      const sel = (selectedStratId || '').toLowerCase();
+      if (sel && keys.includes(sel)) return sel;
+      if (sel.startsWith('lr') && keys.includes('lr')) return 'lr';
+      if (sel.startsWith('sr') && keys.includes('sr')) return 'sr';
+      if (keys.includes('sr')) return 'sr';
+      return keys[0] || '';
+    };
+    const stratKey = pickStratKey();
+    const stratGroup = (() => {
+      const sel = (selectedStratId || '').toLowerCase();
+      if (sel.startsWith('lr')) return 'lr';
+      if (sel.startsWith('sr')) return 'sr';
+      if (sel.startsWith('ir')) return 'ir';
+      if (sel.startsWith('ar')) return 'ar';
+      if (sel.startsWith('t')) return 't';
+      return sel || '';
+    })();
+    const plannedOrden = qtx.planes && stratKey && qtx.planes[stratKey] && Array.isArray(qtx.planes[stratKey].orden) ? qtx.planes[stratKey].orden : null;
     const mttoOrden = plannedOrden || (Array.isArray(mtto.orden) ? mtto.orden : []);
 
     const resolve = (when) => {
@@ -54,7 +88,7 @@ export default function ProtocolMatrix({ data, selectedStratId }) {
         }
         if (when.anchor === 'mtto_cycle_index') {
           const baseStart = qtx.inicio_relativo ? resolve(qtx.inicio_relativo) : resolve({ anchor: 'rt_end', offset_weeks: 0 });
-          const mttoInterval = Number(qtx.mantenimiento_intervalo_semanas || 6);
+          const mttoInterval = Number((qtx.planes && stratKey && qtx.planes[stratKey] && qtx.planes[stratKey].intervalo_semanas) ?? qtx.mantenimiento_intervalo_semanas ?? 6);
           const idx = Number(when.cycle_index || 0);
           return Math.max(0, Math.round(baseStart + idx * mttoInterval)) + off;
         }
@@ -87,7 +121,7 @@ export default function ProtocolMatrix({ data, selectedStratId }) {
     }
 
     // RT
-  const rtWeeks = new Map(); // week -> label
+    const rtWeeks = new Map(); // week -> label
     const pickRt = () => {
       const opts = Array.isArray(rt.opciones) ? rt.opciones : [];
       if (!opts.length) return null;
@@ -123,14 +157,14 @@ export default function ProtocolMatrix({ data, selectedStratId }) {
 
     // Inmunoterapia
     const inmWeeks = new Set();
-    const imm = Array.isArray(inmuno.eventos) ? inmuno.eventos : [];
+    const imm = (Array.isArray(inmuno.eventos) ? inmuno.eventos : []).filter(matchesStrat);
     imm.forEach(e => { const w = resolve(e.when); inmWeeks.add(Math.round(w)); maxWeeks.push(w + 1); });
 
     // Evaluaciones
-    const evalWeeks = new Set();
-    evals.forEach(ev => { const w = resolve(ev.when); evalWeeks.add(Math.round(w)); maxWeeks.push(w + 0.5); });
+  const evalWeeks = new Set();
+  evals.filter(matchesStrat).forEach(ev => { const w = resolve(ev.when); evalWeeks.add(Math.round(w)); maxWeeks.push(w + 0.5); });
 
-  const totalWeeks = Math.max(12, ...maxWeeks, induccion.length * induccionInterval + 2);
+    const totalWeeks = Math.max(12, ...maxWeeks, induccion.length * induccionInterval + 2);
 
     // Build laneDetails so we can show expanded info on hover/click
     const laneDetails = {};
@@ -178,32 +212,32 @@ export default function ProtocolMatrix({ data, selectedStratId }) {
     }
 
     laneDetails['Inmunoterapia'] = { items: [], note: inmuno?.descripcion || inmuno?.nota || null };
-    (Array.isArray(inmuno.eventos) ? inmuno.eventos : []).forEach((e, i) => {
+    imm.forEach((e, i) => {
       const w = Math.round(resolve(e.when));
-      laneDetails['Inmunoterapia'].items.push({ week: w, title: e.titulo || e.nombre || `Inmuno ${i+1}`, body: e.descripcion || e.detalle || null });
+      laneDetails['Inmunoterapia'].items.push({ week: w, title: e.titulo || e.nombre || `Inmuno ${i+1}`, body: e.descripcion || e.detalle || null, cond: e.cond || null });
     });
 
     laneDetails['Evaluaciones'] = { items: [], note: null };
-    evals.forEach((ev, i) => {
+    evals.filter(matchesStrat).forEach((ev, i) => {
       const w = Math.round(resolve(ev.when));
       laneDetails['Evaluaciones'].items.push({ week: w, title: ev.titulo || ev.momento || `Evaluación ${i+1}`, body: ev.descripcion || ev.objetivo || null });
     });
 
     laneDetails['Trasplante'] = { items: [], note: txp?.descripcion || null };
     if (txp) {
-      const eventos = Array.isArray(txp.eventos) ? txp.eventos : (Array.isArray(txp.ciclos) ? txp.ciclos : []);
+      const eventos = (Array.isArray(txp.eventos) ? txp.eventos : (Array.isArray(txp.ciclos) ? txp.ciclos : [])).filter(matchesStrat);
       eventos.forEach((ev, i) => {
         const w = Math.round(resolve(ev.when));
-        laneDetails['Trasplante'].items.push({ week: w, title: ev.titulo || ev.nombre || `Trasplante ${i+1}`, body: ev.descripcion || ev.detalle || null });
+        laneDetails['Trasplante'].items.push({ week: w, title: ev.titulo || ev.nombre || `Trasplante ${i+1}`, body: ev.descripcion || ev.detalle || null, cond: ev.cond || null });
       });
     }
 
     laneDetails['Soporte / Profilaxis'] = { items: [], note: soporte?.descripcion || prof?.descripcion || null };
-    const soporteItems = (soporte?.medidas || soporte?.items) || (prof?.items || prof?.medidas) || [];
-    (Array.isArray(soporteItems) ? soporteItems : []).forEach((it, i) => laneDetails['Soporte / Profilaxis'].items.push({ week: null, title: it.titulo || it.nombre || `Soporte ${i+1}`, body: it.descripcion || it.articulacion || null }));
+    const soporteItems = ((soporte?.medidas || soporte?.items) || (prof?.items || prof?.medidas) || []);
+    (Array.isArray(soporteItems) ? soporteItems : []).filter(matchesStrat).forEach((it, i) => laneDetails['Soporte / Profilaxis'].items.push({ week: null, title: it.titulo || it.nombre || `Soporte ${i+1}`, body: it.descripcion || it.articulacion || null }));
 
     laneDetails['Seguimiento'] = { items: [], note: seg?.descripcion || null };
-    const segItems = Array.isArray(seg?.eventos) ? seg.eventos : (Array.isArray(seg?.ciclos) ? seg.ciclos : []);
+    const segItems = (Array.isArray(seg?.eventos) ? seg.eventos : (Array.isArray(seg?.ciclos) ? seg.ciclos : [])).filter(matchesStrat);
     (segItems || []).forEach((it, i) => { const w = it.when ? Math.round(resolve(it.when)) : null; laneDetails['Seguimiento'].items.push({ week: w, title: it.titulo || it.nombre || `Seguimiento ${i+1}`, body: it.descripcion || it.detalle || null }); });
 
     // Ensure default lanes exist (even if empty) so user can click/hover them
@@ -222,7 +256,14 @@ export default function ProtocolMatrix({ data, selectedStratId }) {
       }
     });
 
-    const rows = Array.from(rowsMap.values());
+    // Only keep rows that have marks or laneDetails items/notes
+    const rows = Array.from(rowsMap.values()).filter((r) => {
+      const hasMarks = (r.weeksMarked instanceof Map && r.weeksMarked.size > 0) || (r.weeksMarked instanceof Set && r.weeksMarked.size > 0);
+      const details = laneDetails && laneDetails[r.label];
+      const hasDetails = details && Array.isArray(details.items) && details.items.length > 0;
+      const hasNote = details && Boolean(details.note);
+      return hasMarks || hasDetails || hasNote;
+    });
 
     return { rows, totalWeeks, laneDetails };
   }, [data, selectedStratId]);
@@ -245,14 +286,14 @@ export default function ProtocolMatrix({ data, selectedStratId }) {
   const plat = protocolPlatinos(data);
 
   return (
-    <div style={{ overflow: 'auto', border: '1px solid #d8e1f1', borderRadius: 12, padding: 12, position: 'relative' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: `160px repeat(${weeks.length}, 24px)`, gap: 6, alignItems: 'center' }}>
+    <div style={{ overflow: 'auto', border: '1px solid #cdd8ef', borderRadius: 12, padding: 12, position: 'relative', background: '#fbfcff' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `180px repeat(${weeks.length}, 26px)`, gap: 6, alignItems: 'center' }}>
         {/* Header weeks (sticky top) */}
-        <div style={{ position: 'sticky', top: 0, left: 0, zIndex: 5, background: '#fff', borderBottom: '1px solid #e3ebfa', borderRight: '1px solid #e3ebfa', height: 22 }} />
+        <div style={{ position: 'sticky', top: 0, left: 0, zIndex: 5, background: '#fbfcff', borderBottom: '1px solid #e3ebfa', borderRight: '1px solid #e3ebfa', height: 24 }} />
         {weeks.map(w => (
           <div
             key={w}
-            style={{ position: 'sticky', top: 0, zIndex: 4, background: '#fff', fontSize: 11, color: '#4a5970', textAlign: 'center', borderBottom: '1px solid #e3ebfa' }}
+            style={{ position: 'sticky', top: 0, zIndex: 4, background: '#fbfcff', fontSize: 11, color: '#334155', textAlign: 'center', borderBottom: '1px solid #e3ebfa' }}
           >
             S{w}
           </div>
@@ -260,7 +301,7 @@ export default function ProtocolMatrix({ data, selectedStratId }) {
         {/* Rows */}
         {rows.map((row, idx) => (
           <React.Fragment key={idx}>
-            <div style={{ position: 'sticky', left: 0, zIndex: 3, background: '#fff', fontSize: 12, color: '#4a5970', textTransform: 'uppercase', letterSpacing: '.06em', borderRight: '1px solid #e3ebfa', paddingRight: 6 }}>
+            <div style={{ position: 'sticky', left: 0, zIndex: 3, background: '#fbfcff', fontSize: 12, color: '#334155', textTransform: 'uppercase', letterSpacing: '.06em', borderRight: '1px solid #e3ebfa', paddingRight: 6 }}>
               {row.label}
             </div>
             {weeks.map((w) => {
@@ -270,6 +311,9 @@ export default function ProtocolMatrix({ data, selectedStratId }) {
               const title = isMap ? (row.weeksMarked.get(w) || '') : '';
               const cellText = isMap && title && title.startsWith('RT') ? 'RT' : '';
               const tipText = isMap ? title : (isSet && active ? row.label : '');
+              // If there are laneDetails items without assigned week, show a placeholder at week 0
+              const details = laneDetails && laneDetails[row.label];
+              const hasUnscheduled = details && Array.isArray(details.items) && details.items.some(it => it.week == null);
               // show platino icon when chemo row has platino drugs in maintenance or when RT week has concomitant carboplatin
               const showPlatIcon = false; // badges removed per user request
               const platIcon = '';
@@ -288,11 +332,14 @@ export default function ProtocolMatrix({ data, selectedStratId }) {
                       setPinned(payload);
                     }
                   }}
-                  style={{ width: 24, height: 16, borderRadius: 4, background: active ? row.color : '#eef3ff', border: '1px solid #e3ebfa', display: 'grid', placeItems: 'center', color: '#fff', fontSize: 9, cursor: active ? 'pointer' : 'default' }}
+                  style={{ width: 26, height: 20, borderRadius: 5, background: active ? row.color : '#eef3ff', border: '1px solid #dbe6fb', display: 'grid', placeItems: 'center', color: active ? '#ffffff' : '#44536b', fontSize: 10, fontWeight: 600, cursor: active ? 'pointer' : 'default' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     {cellText}
                     {showPlatIcon && active ? (<span title={plat.cisplatin ? 'Cisplatino presente — revisar GFR' : 'Carboplatino presente — audiometría requerida'} style={{ fontSize: 11, background: '#fde68a', color: '#92400e', padding: '2px 6px', borderRadius: 6 }}>{platIcon}</span>) : null}
+                    {!active && w === 0 && hasUnscheduled ? (
+                      <span title="Eventos sin semana asignada" style={{ width: 8, height: 8, display: 'inline-block', background: '#ffb020', borderRadius: 8 }} />
+                    ) : null}
                   </div>
                 </div>
               );
@@ -320,7 +367,7 @@ export default function ProtocolMatrix({ data, selectedStratId }) {
               {(laneDetails && laneDetails[pinned.lane] && laneDetails[pinned.lane].items?.length) ? (
                 laneDetails[pinned.lane].items.filter(it => pinned.week == null ? true : it.week === pinned.week).map((it, idx) => (
                   <article key={idx} style={{ padding: 8, borderRadius: 8, border: '1px solid #eef3ff', marginBottom: 8 }}>
-                    <h4 style={{ margin: '0 0 6px' }}>{it.title}{it.span ? ` · ${it.span} sem` : ''}</h4>
+                    <h4 style={{ margin: '0 0 6px' }}>{it.title}{it.span ? ` · ${it.span} sem` : ''} {it.cond ? <span title={it.cond} style={{ fontSize: 11, color: '#7c3aed', background: '#f4e8ff', border: '1px solid #e1caff', padding: '2px 6px', borderRadius: 999, marginLeft: 6 }}>Condicional</span> : null}</h4>
                     {it.details && it.details.length ? (<ul style={{ margin: '6px 0' }}>{it.details.map((d,i)=> <li key={i} style={{ fontSize: 13 }}>{d}</li>)}</ul>) : null}
                     {it.body ? <p style={{ margin: 0, color: '#374151' }}>{it.body}</p> : null}
                   </article>

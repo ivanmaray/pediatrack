@@ -4,22 +4,50 @@ import { requiresAudiometry, requiresGFR, protocolPlatinos, carboplatinConcomita
 
 // Vista rápida: barras por fases principales
 export default function ProtocolQuickBars({ data, selectedStratId }) {
-  const { phases, totalWeeks, marks } = useMemo(() => {
+  const { phases, totalWeeks, marks, needAudio, needGfr, plat, carbWeeks } = useMemo(() => {
     const versiones = Array.isArray(data.versiones) ? data.versiones : [];
     const base = versiones[0] || {};
     const qtx = base.quimioterapia || {};
     const rt = base.radioterapia || {};
     const txp = base.trasplante || null;
     const inmuno = base.inmunoterapia || null;
-    const evals = Array.isArray(base.evaluacion) ? base.evaluacion : [];
+  const evals = Array.isArray(base.evaluacion) ? base.evaluacion : [];
 
-    const induccionInterval = Number(qtx.induccion_intervalo_semanas || 2);
-    const induccion = Array.isArray(qtx.induccion) ? qtx.induccion : [];
+  const induccionInterval = Number(qtx.induccion_intervalo_semanas || 2);
+  const induccionRaw = Array.isArray(qtx.induccion) ? qtx.induccion : [];
     const mtto = base.mantenimiento || {};
-    const stratGroup = selectedStratId && selectedStratId.toLowerCase().startsWith('lr') ? 'lr' : 'sr';
-    const plannedOrden = qtx.planes && qtx.planes[stratGroup] && Array.isArray(qtx.planes[stratGroup].orden) ? qtx.planes[stratGroup].orden : null;
+    const pickStratKey = () => {
+      const planes = qtx.planes || {};
+      const keys = Object.keys(planes).map(k => k.toLowerCase());
+      const sel = (selectedStratId || '').toLowerCase();
+      if (sel && keys.includes(sel)) return sel;
+      // Back-compat for PNET5 (lr/sr labels)
+      if (sel.startsWith('lr') && keys.includes('lr')) return 'lr';
+      if (sel.startsWith('sr') && keys.includes('sr')) return 'sr';
+      // Fallback: first available or 'sr' if present
+      if (keys.includes('sr')) return 'sr';
+      return keys[0] || '';
+    };
+    const stratKey = pickStratKey();
+    const plannedOrden = qtx.planes && stratKey && qtx.planes[stratKey] && Array.isArray(qtx.planes[stratKey].orden) ? qtx.planes[stratKey].orden : null;
     const mttoOrden = plannedOrden || (Array.isArray(mtto.orden) ? mtto.orden : []);
 
+    const matchesStrat = (obj) => {
+      const sel = (selectedStratId || '').toLowerCase();
+      if (!obj || typeof obj !== 'object') return true;
+      const only = (obj.only_strats || obj.estratos || obj.strats);
+      if (Array.isArray(only) && only.length) {
+        return only.map(String).map(s=>s.toLowerCase()).includes(sel);
+      }
+      const exclude = obj.exclude_strats;
+      if (Array.isArray(exclude) && exclude.length) {
+        return !exclude.map(String).map(s=>s.toLowerCase()).includes(sel);
+      }
+      return true;
+    };
+
+    const induccion = induccionRaw.filter(matchesStrat);
+    
     const resolve = (when) => {
       // Support arrays of when objects: return first resolvable
       if (Array.isArray(when)) {
@@ -49,7 +77,7 @@ export default function ProtocolQuickBars({ data, selectedStratId }) {
         }
         if (when.anchor === 'mtto_cycle_index') {
           const baseStart = qtx.inicio_relativo ? resolve(qtx.inicio_relativo) : resolve({ anchor: 'rt_end', offset_weeks: 0 });
-          const mttoInterval = Number((qtx.planes && qtx.planes[stratGroup] && qtx.planes[stratGroup].intervalo_semanas) ?? qtx.mantenimiento_intervalo_semanas ?? 6);
+          const mttoInterval = Number((qtx.planes && stratKey && qtx.planes[stratKey] && qtx.planes[stratKey].intervalo_semanas) ?? qtx.mantenimiento_intervalo_semanas ?? 6);
           const idx = Number(when.cycle_index || 0);
           return Math.max(0, Math.round(baseStart + idx * mttoInterval)) + off;
         }
@@ -87,7 +115,7 @@ export default function ProtocolQuickBars({ data, selectedStratId }) {
       bars.push({ id: 'rt', label: 'Radioterapia', start: rts, end: rte, color: '#5078d9', tooltip: tip });
     }
     // Consolidación (span entre primera y última si hay varias)
-    const consArr = Array.isArray(qtx.consolidacion) ? qtx.consolidacion : (qtx.consolidacion ? [qtx.consolidacion] : []);
+  const consArr = (Array.isArray(qtx.consolidacion) ? qtx.consolidacion : (qtx.consolidacion ? [qtx.consolidacion] : [])).filter(matchesStrat);
     if (consArr.length) {
       const ws = consArr.map(c => resolve(c.when)).filter(n => Number.isFinite(n));
       if (ws.length) {
@@ -102,7 +130,7 @@ export default function ProtocolQuickBars({ data, selectedStratId }) {
       bars.push({ id: 'trasplante', label: 'Trasplante', start: ts, end: ts + 1, color: '#ea8567', tooltip: 'Trasplante' });
     }
     // Inmunoterapia (rango entre primer y último evento)
-    const inmunoE = Array.isArray(inmuno?.eventos) ? inmuno.eventos : [];
+  const inmunoE = (Array.isArray(inmuno?.eventos) ? inmuno.eventos : []).filter(matchesStrat);
     if (inmunoE.length) {
       const starts = inmunoE.map((e) => resolve(e.when));
       const minS = Math.min(...starts);
@@ -112,7 +140,7 @@ export default function ProtocolQuickBars({ data, selectedStratId }) {
     // Mantenimiento (PNET5 u otros con plan definido)
     if (mttoOrden.length) {
       const mttoStart = resolve(qtx.inicio_relativo || { anchor: 'rt_end', offset_weeks: 0 });
-      const mttoInterval = Number((qtx.planes && qtx.planes[stratGroup] && qtx.planes[stratGroup].intervalo_semanas) ?? qtx.mantenimiento_intervalo_semanas ?? 6);
+      const mttoInterval = Number((qtx.planes && stratKey && qtx.planes[stratKey] && qtx.planes[stratKey].intervalo_semanas) ?? qtx.mantenimiento_intervalo_semanas ?? 6);
       const mttoEnd = mttoStart + mttoInterval * mttoOrden.length;
       const ciclosDef = mtto.ciclos || {};
       const tip = mttoOrden.map((letter, idx) => {
@@ -126,7 +154,7 @@ export default function ProtocolQuickBars({ data, selectedStratId }) {
   const maxEnd = Math.max(12, ...bars.map(b => b.end));
 
     const marks = [];
-    evals.forEach((ev, i) => {
+    evals.filter(matchesStrat).forEach((ev, i) => {
       const w = resolve(ev.when);
       marks.push({ id: `ev-${i}`, title: ev.titulo || 'Evaluación', week: w });
     });
@@ -150,9 +178,9 @@ export default function ProtocolQuickBars({ data, selectedStratId }) {
     <div style={{ display: 'grid', gap: 12 }}>
       <div style={{ position: 'relative', paddingTop: 8 }}>
         {/* Marca de semanas */}
-        <div style={{ position: 'relative', height: 18, borderBottom: '1px dashed #b3c1d9' }}>
+        <div style={{ position: 'relative', height: 20, borderBottom: '1px dashed #b3c1d9' }}>
           {[...Array(Math.ceil(totalWeeks)+1)].map((_, i) => (
-            <span key={i} style={{ position: 'absolute', left: pct(i), transform: 'translateX(-50%)', fontSize: 11, color: '#4a5970' }}>S{i}</span>
+            <span key={i} style={{ position: 'absolute', left: pct(i), transform: 'translateX(-50%)', fontSize: 11, color: '#384860', background: '#fff', padding: '0 2px' }}>S{i}</span>
           ))}
         </div>
         {/* Marks de evaluaciones */}
@@ -161,18 +189,24 @@ export default function ProtocolQuickBars({ data, selectedStratId }) {
         ))}
       </div>
       {/* Barras */}
-      <div style={{ display: 'grid', gap: 8 }}>
-        {phases.map(p => (
-          <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '120px 1fr', alignItems: 'center', gap: 8 }}>
-            <div style={{ fontSize: 12, color: '#4a5970', textTransform: 'uppercase', letterSpacing: '.06em' }}>{p.label}</div>
-            <div style={{ position: 'relative', height: 18, background: '#eef3ff', border: '1px solid #d8e1f1', borderRadius: 999 }}>
+      <div style={{ display: 'grid', gap: 10 }}>
+        {phases.map(p => {
+          const barLabel = (p.tooltip ? String(p.tooltip).split('\n')[0] : p.label) || '';
+          return (
+          <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '160px 1fr', alignItems: 'center', gap: 10 }}>
+            <div style={{ fontSize: 12, color: '#334155', textTransform: 'uppercase', letterSpacing: '.06em' }}>{p.label}</div>
+            <div style={{ position: 'relative', height: 28, background: '#f7f9ff', border: '1px solid #cfd9ee', borderRadius: 12 }}>
               <div
                 onMouseEnter={(e) => showTip(e, p.tooltip || p.label)}
                 onMouseMove={(e) => showTip(e, p.tooltip || p.label)}
                 onMouseLeave={hideTip}
                 onClick={(e) => showTip(e, p.tooltip || p.label)}
-                style={{ position: 'absolute', left: pct(p.start), width: pct(p.end - p.start), top: -1, bottom: -1, background: p.color, borderRadius: 999, boxShadow: '0 8px 18px rgba(0,0,0,.12)', cursor: 'pointer' }}
+                style={{ position: 'absolute', left: pct(p.start), width: pct(p.end - p.start), top: -2, bottom: -2, background: p.color, borderRadius: 12, boxShadow: '0 8px 18px rgba(0,0,0,.12)', cursor: 'pointer', minWidth: 8 }}
               />
+              {/* In-bar label with ellipsis (no pointer events to preserve hover) */}
+              <div style={{ position: 'absolute', left: pct(p.start), width: pct(p.end - p.start), top: 0, bottom: 0, display: 'flex', alignItems: 'center', padding: '0 8px', pointerEvents: 'none' }}>
+                <span style={{ color: '#ffffff', fontSize: 12, fontWeight: 600, textShadow: '0 1px 2px rgba(0,0,0,.35)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{barLabel}</span>
+              </div>
               {/* Protocol-level badges: show audiometry/GFR badges on bars that include platinos */}
               {/* Removed GFR/Audi badges as requested — keep UI clean */}
               {/* Carboplatino badge on RT retained if needed */}
@@ -183,7 +217,7 @@ export default function ProtocolQuickBars({ data, selectedStratId }) {
               ) : null}
             </div>
           </div>
-        ))}
+        );})}
       </div>
       {tip.show && (
         <div role="tooltip" style={{ position: 'fixed', left: tip.x, top: tip.y, background: '#0e1220', color: '#fff', padding: '6px 8px', borderRadius: 8, fontSize: 12, maxWidth: 480, boxShadow: '0 8px 18px rgba(0,0,0,.3)', zIndex: 50, pointerEvents: 'none', whiteSpace: 'pre-wrap' }}>

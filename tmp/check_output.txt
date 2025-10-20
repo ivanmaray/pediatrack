@@ -1,0 +1,16 @@
+rtStartWeek 4 rtSpan 6 mttoStartOffset 16
+- eval1 inicial => 0 label: inicial
+- eval2 antes_de_mantenimiento => 10 label: antes_de_mantenimiento
+- eval3a intermedia => 25 label: intermedia
+- eval3b intermedia => 40 label: intermedia
+- eval4 final => 46 label: final
+
+Maintenance cycles (orden & durations): [ 'A', 'B', 'A', 'B', 'A', 'B' ]
+ mtto #0 (A) start 16 dur 6 end 22
+ mtto #1 (B) start 22 dur 3 end 25
+ mtto #2 (A) start 25 dur 6 end 31
+ mtto #3 (B) start 31 dur 3 end 34
+ mtto #4 (A) start 34 dur 6 end 40
+ mtto #5 (B) start 40 dur 3 end 43
+
+Done.

@@ -13,4 +13,12 @@
     "titulo": "Neuroblastoma de Alto Riesgo (SIOPEN)",
     "area": "Neuroblastoma"
   }
+  ,
+  {
+    "id": "lal_sehop_2013",
+    "nombre": "LAL SEHOP/PETHEMA 2013",
+    "grupo": "SEHOP · PETHEMA",
+    "titulo": "LAL SEHOP/PETHEMA 2013 (pediátrica)",
+    "area": "Leucemia linfoblástica aguda"
+  }
 ]

@@ -84,8 +84,23 @@ export default function ProtocolStepper({ data, selectedStratId }) {
       }
     };
 
-    // Evaluaciones importantes
-  evals.forEach(ev => push(ev.titulo || 'Evaluación', ev.descripcion || '', ev.when, 'Evaluación'));
+    // Helper for stratification filtering
+    const matchesStrat = (obj) => {
+      const sel = (selectedStratId || '').toLowerCase();
+      if (!obj || typeof obj !== 'object') return true;
+      const only = (obj.only_strats || obj.estratos || obj.strats);
+      if (Array.isArray(only) && only.length) {
+        return only.map(String).map(s=>s.toLowerCase()).includes(sel);
+      }
+      const exclude = obj.exclude_strats;
+      if (Array.isArray(exclude) && exclude.length) {
+        return !exclude.map(String).map(s=>s.toLowerCase()).includes(sel);
+      }
+      return true;
+    };
+
+  // Evaluaciones importantes
+  evals.filter(matchesStrat).forEach(ev => push(ev.titulo || 'Evaluación', ev.descripcion || '', ev.when, 'Evaluación'));
   if (cirugia) push('Cirugía', cirugia.descripcion || '', cirugia.when, 'Cirugía');
 
     // Elegir opción de RT en función del estrato si hay coincidencia
@@ -112,43 +127,54 @@ export default function ProtocolStepper({ data, selectedStratId }) {
       }
     }
 
-  const consArr = Array.isArray(qtx.consolidacion) ? qtx.consolidacion : (qtx.consolidacion ? [qtx.consolidacion] : []);
-  consArr.forEach(cons => push(cons.titulo || 'Consolidación', cons.descripcion || '', cons.when, 'Consolidación'));
+    const consArr = (Array.isArray(qtx.consolidacion) ? qtx.consolidacion : (qtx.consolidacion ? [qtx.consolidacion] : [])).filter(matchesStrat);
+    consArr.forEach(cons => push(cons.titulo || 'Consolidación', cons.descripcion || '', cons.when, 'Consolidación'));
 
-  if (txp) push('Trasplante', txp.descripcion || '', txp.when, 'Trasplante');
+    if (txp && Array.isArray(txp.eventos)) {
+      txp.eventos.filter(matchesStrat).forEach((ev, i) => {
+      const title = ev.titulo || (i === 0 ? 'Trasplante' : `Trasplante ${i+1}`);
+      const tag = ev.cond ? 'Condicional' : undefined;
+      push(title, ev.descripcion || '', ev.when, 'Trasplante', tag);
+    });
+    } else if (txp && txp.when) {
+      push('Trasplante', txp.descripcion || '', txp.when, 'Trasplante');
+    }
 
     // Inmunoterapia: añadir cada ciclo/evento
-  const imm = Array.isArray(inmuno.eventos) ? inmuno.eventos : [];
-  imm.forEach((ev, idx) => push(ev.titulo || (idx === 0 ? 'Inicio Inmunoterapia' : 'Inmunoterapia'), ev.descripcion || '', ev.when, 'Inmunoterapia'));
+  const imm = (Array.isArray(inmuno.eventos) ? inmuno.eventos : []).filter(matchesStrat);
+  imm.forEach((ev, idx) => {
+    const baseTitle = ev.titulo || (idx === 0 ? 'Inicio Inmunoterapia' : 'Inmunoterapia');
+    const tag = ev.cond ? 'Condicional' : undefined;
+    push(baseTitle, ev.descripcion || '', ev.when, 'Inmunoterapia', tag);
+  });
 
     // Soporte transversal
-  const medidas = Array.isArray(soporte.medidas) ? soporte.medidas : [];
-  medidas.forEach(m => push(m.titulo || 'Soporte', m.descripcion || '', m.when, 'Soporte', m.tipo));
+    const medidas = (Array.isArray(soporte.medidas) ? soporte.medidas : []).filter(matchesStrat);
+    medidas.forEach(m => push(m.titulo || 'Soporte', m.descripcion || '', m.when, 'Soporte', m.tipo));
 
     // Profilaxis
-  const profEvents = Array.isArray(profilaxis.eventos) ? profilaxis.eventos : [];
-  profEvents.forEach(p => push(p.titulo || 'Profilaxis', p.descripcion || '', p.when, 'Profilaxis'));
+    const profEvents = (Array.isArray(profilaxis.eventos) ? profilaxis.eventos : []).filter(matchesStrat);
+    profEvents.forEach(p => push(p.titulo || 'Profilaxis', p.descripcion || '', p.when, 'Profilaxis'));
 
     // Seguimiento
-  const segEvents = Array.isArray(seguimiento.eventos) ? seguimiento.eventos : [];
-  segEvents.forEach(sg => push(sg.titulo || 'Seguimiento', sg.descripcion || '', sg.when, 'Seguimiento'));
+    const segEvents = (Array.isArray(seguimiento.eventos) ? seguimiento.eventos : []).filter(matchesStrat);
+    segEvents.forEach(sg => push(sg.titulo || 'Seguimiento', sg.descripcion || '', sg.when, 'Seguimiento'));
 
     // Inducción: marcar inicio/fin a modo de hito
-    const induccion = Array.isArray(qtx.induccion) ? qtx.induccion : [];
+    const induccion = (Array.isArray(qtx.induccion) ? qtx.induccion : []).filter(matchesStrat);
     if (induccion.length) {
-      // Inicio inducción en ciclo 0
-      push('Inicio de inducción', 'RAPID COJEC', { anchor: 'induction_cycle_index', cycle_index: 0 }, 'Inducción');
-      // Fin de inducción aproximado usando último índice
-      const lastIdx = induccion.reduce((max, c) => {
-        const w = c.when;
-        const idx = (w && typeof w === 'object' && w.anchor === 'induction_cycle_index') ? Number(w.cycle_index || 0) : max;
-        return Math.max(max, idx);
-      }, 0);
-      push('Fin de inducción', 'Fin RAPID COJEC', { anchor: 'induction_cycle_index', cycle_index: lastIdx }, 'Inducción');
-
-      // Mostrar cada ciclo de inducción como hito individual (Ciclos)
-      induccion.forEach((c) => {
-        const title = c.titulo || c.id || 'Ciclo de inducción';
+      // Calculate min/max resolved weeks among induction cycles
+      const weeks = induccion.map(c => resolve(c.when)).filter(w => typeof w === 'number' && !Number.isNaN(w));
+      if (weeks.length) {
+        const minW = Math.min(...weeks);
+        const maxW = Math.max(...weeks);
+        // Neutral labels without protocol-specific naming
+        push('Inicio de inducción', '', minW, 'Inducción');
+        push('Fin de inducción', '', maxW, 'Inducción');
+      }
+      // Each induction cycle as a milestone in Ciclos
+      induccion.forEach((c, idx) => {
+        const title = c.titulo || c.id || `Ciclo de inducción ${idx + 1}`;
         const descr = c.descripcion || '';
         push(title, descr, c.when, 'Ciclos');
       });
@@ -156,13 +182,23 @@ export default function ProtocolStepper({ data, selectedStratId }) {
 
     // Mantenimiento (PNET5): generar cursos A/B según orden y mostrar inicio de mantenimiento
     const mtto = base.mantenimiento || {};
-    // Orden por estrato: usar quimioterapia.planes[lr|sr].orden si está disponible
-    const stratGroup = selectedStratId && selectedStratId.toLowerCase().startsWith('lr') ? 'lr' : 'sr';
-    const plannedOrden = qtx.planes && qtx.planes[stratGroup] && Array.isArray(qtx.planes[stratGroup].orden) ? qtx.planes[stratGroup].orden : null;
+    // Orden por estrato: usar qtx.planes[sr|ir|ar|t|lr] si disponible
+    const pickStratKey = () => {
+      const planes = qtx.planes || {};
+      const keys = Object.keys(planes).map(k => k.toLowerCase());
+      const sel = (selectedStratId || '').toLowerCase();
+      if (sel && keys.includes(sel)) return sel;
+      if (sel.startsWith('lr') && keys.includes('lr')) return 'lr';
+      if (sel.startsWith('sr') && keys.includes('sr')) return 'sr';
+      if (keys.includes('sr')) return 'sr';
+      return keys[0] || '';
+    };
+    const stratKey = pickStratKey();
+    const plannedOrden = qtx.planes && stratKey && qtx.planes[stratKey] && Array.isArray(qtx.planes[stratKey].orden) ? qtx.planes[stratKey].orden : null;
     const mttoOrden = plannedOrden || (Array.isArray(mtto.orden) ? mtto.orden : []);
     const ciclosDef = mtto.ciclos || {};
     if (mttoOrden.length) {
-      const mttoInterval = Number((qtx.planes && qtx.planes[stratGroup] && qtx.planes[stratGroup].intervalo_semanas) ?? qtx.mantenimiento_intervalo_semanas ?? 6);
+  const mttoInterval = Number((qtx.planes && stratKey && qtx.planes[stratKey] && qtx.planes[stratKey].intervalo_semanas) ?? qtx.mantenimiento_intervalo_semanas ?? 6);
       const mttoStart = resolve(qtx.inicio_relativo || { anchor: 'rt_end', offset_weeks: 6 });
       push('Inicio de mantenimiento', 'Comienza quimioterapia de mantenimiento', mttoStart, 'Quimioterapia');
       mttoOrden.forEach((letter, idx) => {

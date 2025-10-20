@@ -60,9 +60,9 @@
           "momento": "final",
           "descripcion": "≈6 semanas tras el último curso de mantenimiento: RM craneal.",
           "when": [
+            { "anchor": "treatment_end", "offset_weeks": 6 },
             { "anchor": "mtto_cycle_index", "cycle_index": 5, "offset_weeks": 6 },
-            { "anchor": "mtto_cycle_index", "cycle_index": 7, "offset_weeks": 6 },
-            { "anchor": "treatment_end", "offset_weeks": 6 }
+            { "anchor": "mtto_cycle_index", "cycle_index": 7, "offset_weeks": 6 }
           ]
         }
       ],

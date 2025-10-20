@@ -380,6 +380,89 @@ h3 {
   gap: 18px;
 }
 
+/* Small utility button styles used in home cards */
+.btn {
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+.btn:active { transform: translateY(0); }
+.btn--small { padding: 6px 10px; font-size: 13px; }
+.btn--ghost { background: transparent; border-color: rgba(15,76,129,0.12); color: var(--color-primary); }
+
+/* Modal preview styles */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 12, 24, 0.48);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 12000;
+}
+.modal {
+  width: min(920px, 92vw);
+  background: var(--color-surface);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  padding: 16px;
+}
+.modal__header { display:flex; justify-content: space-between; align-items: center; gap: 12px; }
+.modal__body { padding: 12px 0; }
+.modal__footer { display:flex; justify-content:flex-end; padding-top: 8px; }
+.preview-badges .badge { margin-right: 6px; }
+
+/* Protocol card visual polish */
+.protocol-card {
+  display: block;
+  background: var(--color-surface);
+  border-radius: 12px;
+  padding: 14px;
+  border: 1px solid var(--color-border-strong);
+  box-shadow: 0 8px 20px rgba(12, 45, 84, 0.06);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+.protocol-card:focus-within,
+.protocol-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 42px rgba(12, 45, 84, 0.12);
+}
+.protocol-card__meta { font-size: 13px; color: var(--color-text-subtle); display:flex; gap:8px; align-items:center; }
+.protocol-card__title { margin: 8px 0 0; font-size: 16px; font-weight: 700; color: var(--color-text); }
+.protocol-card__actions { display:flex; gap:8px; margin-top:8px; }
+.protocol-card__badges .badge { font-size: 12px; padding: 6px 8px; border-radius: 10px; background: rgba(15,76,129,0.06); color: var(--color-primary); border: 1px solid rgba(15,76,129,0.08); }
+.badge--secondary { background: rgba(31,138,112,0.08); color: var(--color-accent); border-color: rgba(31,138,112,0.12); }
+
+/* Smaller adjustments for tag-row */
+.tag-row { display:flex; gap:8px; align-items:center; margin-top:6px; }
+.badge__logo { opacity: 0.9; margin-right:6px; }
+
+/* Ensure modal buttons are visible on dark/light */
+.modal .btn { background: var(--color-primary-soft); border-color: rgba(15,76,129,0.12); color: var(--color-primary); }
+.modal .btn--ghost { background: transparent; color: var(--color-primary); }
+
+/* Hero list label (non-interactive, visually consistent) */
+.hero__list-label {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(10, 30, 50, 0.06);
+  color: var(--color-text-subtle);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+
 .search-bar {
   position: relative;
 }
@@ -893,31 +976,41 @@ button.protocol-card:focus-visible {
   top: 12px;
   bottom: 12px;
   border-radius: 14px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   background: linear-gradient(135deg, rgba(15, 76, 129, 0.22), rgba(31, 138, 112, 0.18));
-  color: var(--color-text);
+  color: #0e1220;
   box-shadow: 0 12px 28px rgba(15, 60, 108, 0.18);
   display: flex;
   flex-direction: column;
   gap: 4px;
   pointer-events: none;
+  overflow: hidden;
 }
 
 .timeline-block__title {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .timeline-block__time {
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--color-primary);
+  color: #1e3a8a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .timeline-block__span {
   font-size: 11px;
-  color: var(--color-text-subtle);
+  color: #4b5563;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .timeline-block--quimioterapia {
@@ -1035,11 +1128,11 @@ button.protocol-card:focus-visible {
 }
 
 .timeline-node__content {
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(196, 205, 243, 0.6);
-  border-radius: 20px;
+  background: #ffffff;
+  border: 1px solid #dbe6fb;
+  border-radius: 16px;
   padding: 18px 22px;
-  box-shadow: 0 16px 40px rgba(40, 66, 136, 0.12);
+  box-shadow: 0 10px 28px rgba(40, 66, 136, 0.10);
   display: grid;
   gap: 10px;
 }
@@ -1069,8 +1162,8 @@ button.protocol-card:focus-visible {
 
 .timeline-node__title {
   margin: 0;
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   color: var(--color-text);
 }
 
@@ -1095,9 +1188,9 @@ button.protocol-card:focus-visible {
 
 .timeline-node__body {
   margin: 0;
-  font-size: 13px;
-  color: var(--color-text-subtle);
-  line-height: 1.6;
+  font-size: 14px;
+  color: var(--color-text);
+  line-height: 1.7;
 }
 
 .timeline-node__list {

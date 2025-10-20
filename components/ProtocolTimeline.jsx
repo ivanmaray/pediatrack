@@ -394,8 +394,22 @@ const buildQuimioPhases = (quimio = {}, context, createItem) => {
     ["mantenimiento", "Mantenimiento"],
   ];
 
+  const matchesStrat = (obj) => {
+    const sel = (context?.stratId || '').toLowerCase();
+    if (!obj || typeof obj !== 'object') return true;
+    const only = (obj.only_strats || obj.estratos || obj.strats);
+    if (Array.isArray(only) && only.length) {
+      return only.map(String).map(s=>s.toLowerCase()).includes(sel);
+    }
+    const exclude = obj.exclude_strats;
+    if (Array.isArray(exclude) && exclude.length) {
+      return !exclude.map(String).map(s=>s.toLowerCase()).includes(sel);
+    }
+    return true;
+  };
+
   order.forEach(([key, label]) => {
-    const itemsRaw = normalizeItems(quimio[key]);
+    const itemsRaw = normalizeItems(quimio[key]).filter(matchesStrat);
     if (key !== "mantenimiento" && !itemsRaw.length) return;
 
     if (key !== "mantenimiento") {
@@ -512,7 +526,22 @@ const buildPhaseSet = (version, protocolo, context, selectedStratId) => {
     });
   };
 
-  const evaluacion = normalizeItems(version.evaluacion || protocolo.evaluacion);
+  // Stratification filter helper
+  const matchesStrat = (obj) => {
+    const sel = (selectedStratId || '').toLowerCase();
+    if (!obj || typeof obj !== 'object') return true;
+    const only = (obj.only_strats || obj.estratos || obj.strats);
+    if (Array.isArray(only) && only.length) {
+      return only.map(String).map(s=>s.toLowerCase()).includes(sel);
+    }
+    const exclude = obj.exclude_strats;
+    if (Array.isArray(exclude) && exclude.length) {
+      return !exclude.map(String).map(s=>s.toLowerCase()).includes(sel);
+    }
+    return true;
+  };
+
+  const evaluacion = normalizeItems(version.evaluacion || protocolo.evaluacion).filter(matchesStrat);
   if (evaluacion.length) {
     pushPhase({
       id: "evaluacion",
@@ -642,7 +671,7 @@ const buildPhaseSet = (version, protocolo, context, selectedStratId) => {
 
   const soporte = version.soporte || protocolo.soporte;
   if (soporte) {
-    const medidas = normalizeItems(soporte.medidas || soporte.items);
+    const medidas = normalizeItems(soporte.medidas || soporte.items).filter(matchesStrat);
     pushPhase({
       id: "soporte",
       lane: PHASE_LANE_LABELS.soporte,
@@ -672,7 +701,7 @@ const buildPhaseSet = (version, protocolo, context, selectedStratId) => {
 
   const trasplanteBlock = version.trasplante || protocolo.trasplante;
   if (trasplanteBlock) {
-    const eventos = normalizeItems(trasplanteBlock.eventos || trasplanteBlock.ciclos || trasplanteBlock.fases || trasplanteBlock.items);
+    const eventos = normalizeItems(trasplanteBlock.eventos || trasplanteBlock.ciclos || trasplanteBlock.fases || trasplanteBlock.items).filter(matchesStrat);
     const laneLabel = PHASE_LANE_LABELS.trasplante;
     pushPhase({
       id: "trasplante",
@@ -711,7 +740,7 @@ const buildPhaseSet = (version, protocolo, context, selectedStratId) => {
 
   const inmunoterapiaBlock = version.inmunoterapia || protocolo.inmunoterapia;
   if (inmunoterapiaBlock) {
-    const eventos = normalizeItems(inmunoterapiaBlock.eventos || inmunoterapiaBlock.ciclos || inmunoterapiaBlock.fases || inmunoterapiaBlock.items);
+    const eventos = normalizeItems(inmunoterapiaBlock.eventos || inmunoterapiaBlock.ciclos || inmunoterapiaBlock.fases || inmunoterapiaBlock.items).filter(matchesStrat);
     const laneLabel = PHASE_LANE_LABELS.inmunoterapia;
     pushPhase({
       id: "inmunoterapia",
@@ -750,7 +779,7 @@ const buildPhaseSet = (version, protocolo, context, selectedStratId) => {
 
   const seguimientoBlock = version.seguimiento || protocolo.seguimiento;
   if (seguimientoBlock) {
-    const eventos = normalizeItems(seguimientoBlock.eventos || seguimientoBlock.ciclos || seguimientoBlock.fases || seguimientoBlock.items);
+    const eventos = normalizeItems(seguimientoBlock.eventos || seguimientoBlock.ciclos || seguimientoBlock.fases || seguimientoBlock.items).filter(matchesStrat);
     const laneLabel = PHASE_LANE_LABELS.seguimiento;
     pushPhase({
       id: "seguimiento",
@@ -1199,36 +1228,58 @@ export default function ProtocolTimeline({ data, selectedStratId }) {
         {/* Mostrar solo carriles visibles */}
         {visibleLanes.map((lane) => {
           const effectiveMax = Math.max(maxWeek, 1);
+          // Simple stacking: assign row indices to overlapping blocks
+          const padY = 12; // vertical padding inside track
+          const blockHeight = 28;
+          const vgap = 8;
+          const minGapPx = 6; // minimal gap to consider non-overlap
+          const placements = [];
+          const rowsEnds = []; // track last end px per row
+          const sorted = [...lane.events].sort((a,b) => a.startWeek - b.startWeek);
+          const totalWidthPx = maxWeek * pxPerWeek;
+          sorted.forEach(ev => {
+            const startPx = (ev.startWeek / effectiveMax) * totalWidthPx;
+            const durationPx = ((ev.endWeek - ev.startWeek) / effectiveMax) * totalWidthPx;
+            const widthPx = Math.max(durationPx, 40);
+            // find first row that doesn't overlap
+            let row = 0;
+            for (; row < rowsEnds.length; row++) {
+              if (startPx >= (rowsEnds[row] || 0) + minGapPx) break;
+            }
+            if (row === rowsEnds.length) rowsEnds.push(0);
+            rowsEnds[row] = Math.max(rowsEnds[row], startPx + widthPx);
+            placements.push({ ev, startPx, widthPx, row });
+          });
+          const rowsCount = Math.max(1, rowsEnds.length);
+          const trackHeight = padY * 2 + rowsCount * blockHeight + (rowsCount - 1) * vgap;
           return (
             <div key={lane.id} className="timeline-lane">
               <div className="timeline-lane__label">{lane.label}</div>
-              <div className="timeline-lane__track">
-        {lane.events.map((event) => {
-          const startPx = (event.startWeek / effectiveMax) * (maxWeek * pxPerWeek);
-          const durationPx = ((event.endWeek - event.startWeek) / effectiveMax) * (maxWeek * pxPerWeek);
-          const widthPx = Math.max(durationPx, 40); // Minimum 40px width
-          const blockSlug = slugify(lane.label);
-          const blockClass = `timeline-block timeline-block--${blockSlug}`;
-          const wrappedTitle = lane.label === "Soporte / Profilaxis" ? (event.title || "").split(" / ")[0] : event.title;
-          return (
-            <div
-              key={event.id}
-              className={blockClass}
-              style={{ left: `${startPx}px`, width: `${widthPx}px` }}
-              title={`${event.phaseTitle}${event.title ? ` · ${event.title}` : ""}`}
-            >
-              <span className="timeline-block__title" title={event.title || event.phaseTitle}>
-                {wrappedTitle}
-              </span>
-              {widthPx > 64 && event.whenLabel && (
-                <span className="timeline-block__time">{event.whenLabel}</span>
-              )}
-              {widthPx > 80 && event.spanLabel && (
-                <span className="timeline-block__span">{event.spanLabel}</span>
-              )}
-            </div>
-          );
-        })}
+              <div className="timeline-lane__track" style={{ height: `${trackHeight}px` }}>
+                {placements.map(({ ev, startPx, widthPx, row }) => {
+                  const blockSlug = slugify(lane.label);
+                  const blockClass = `timeline-block timeline-block--${blockSlug}`;
+                  const wrappedTitle = lane.label === "Soporte / Profilaxis" ? (ev.title || "").split(" / ")[0] : ev.title;
+                  const topPx = padY + row * (blockHeight + vgap);
+                  return (
+                    <div
+                      key={ev.id}
+                      className={blockClass}
+                      style={{ left: `${startPx}px`, width: `${widthPx}px`, top: `${topPx}px`, height: `${blockHeight}px`, bottom: 'auto' }}
+                      title={`${ev.phaseTitle}${ev.title ? ` · ${ev.title}` : ""}`}
+                    >
+                      <span className="timeline-block__title" title={ev.title || ev.phaseTitle}>
+                        {wrappedTitle}
+                      </span>
+                      {widthPx > 64 && ev.whenLabel && (
+                        <span className="timeline-block__time">{ev.whenLabel}</span>
+                      )}
+                      {widthPx > 80 && ev.spanLabel && (
+                        <span className="timeline-block__span">{ev.spanLabel}</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );

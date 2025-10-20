@@ -11,14 +11,38 @@ export default function ProtocolCycleCalendar({ data, selectedStratId }) {
     const versiones = Array.isArray(data.versiones) ? data.versiones : [];
     const base = versiones[0] || {};
     const qtx = base.quimioterapia || {};
-    const induccion = Array.isArray(qtx.induccion) ? qtx.induccion : [];
-  const consolidacion = Array.isArray(qtx.consolidacion) ? qtx.consolidacion : [];
-  // mantenimiento: preferir planes por estrato si existen
-  const stratGroup = selectedStratId && selectedStratId.toLowerCase().startsWith('lr') ? 'lr' : 'sr';
-  const planned = qtx.planes && qtx.planes[stratGroup] ? qtx.planes[stratGroup] : null;
+    // Stratification filter helper
+    const matchesStrat = (obj) => {
+      const sel = (selectedStratId || '').toLowerCase();
+      if (!obj || typeof obj !== 'object') return true;
+      const only = (obj.only_strats || obj.estratos || obj.strats);
+      if (Array.isArray(only) && only.length) {
+        return only.map(String).map(s=>s.toLowerCase()).includes(sel);
+      }
+      const exclude = obj.exclude_strats;
+      if (Array.isArray(exclude) && exclude.length) {
+        return !exclude.map(String).map(s=>s.toLowerCase()).includes(sel);
+      }
+      return true;
+    };
+    const induccion = (Array.isArray(qtx.induccion) ? qtx.induccion : []).filter(matchesStrat);
+    const consolidacion = (Array.isArray(qtx.consolidacion) ? qtx.consolidacion : []).filter(matchesStrat);
+  // mantenimiento: preferir planes por estrato si existen (sr/ir/ar/t/lr)
+  const pickStratKey = () => {
+    const planes = qtx.planes || {};
+    const keys = Object.keys(planes).map(k => k.toLowerCase());
+    const sel = (selectedStratId || '').toLowerCase();
+    if (sel && keys.includes(sel)) return sel;
+    if (sel.startsWith('lr') && keys.includes('lr')) return 'lr';
+    if (sel.startsWith('sr') && keys.includes('sr')) return 'sr';
+    if (keys.includes('sr')) return 'sr';
+    return keys[0] || '';
+  };
+  const stratKey = pickStratKey();
+  const planned = qtx.planes && stratKey ? qtx.planes[stratKey] : null;
   const mttoOrden = planned && Array.isArray(planned.orden) ? planned.orden : (Array.isArray(qtx.mantenimiento?.orden) ? qtx.mantenimiento.orden : []);
   const mttoInterval = Number((planned && planned.intervalo_semanas) ?? qtx.mantenimiento_intervalo_semanas ?? 6);
-  const inmuno = Array.isArray(base.inmunoterapia?.eventos) ? base.inmunoterapia.eventos : [];
+  const inmuno = (Array.isArray(base.inmunoterapia?.eventos) ? base.inmunoterapia.eventos : []).filter(matchesStrat);
   const interval = Number(qtx.induccion_intervalo_semanas || 2);
 
     const resolve = (when) => {
@@ -76,8 +100,8 @@ export default function ProtocolCycleCalendar({ data, selectedStratId }) {
     for (let j = 0; j < inmuno.length; j++) {
       const e = inmuno[j];
       const week = resolve(e.when);
-      // algunos eventos no tienen esquema de drogas: mostramos descripción
-      list.push({ id: e.id || `immuno_${j}_${week}`, title: e.titulo || 'Inmunoterapia', week, descr: e.descripcion || '', drugs: [], kind: 'inmunoterapia' });
+      // algunos eventos no tienen esquema de drogas: mostramos descripción; incluir condicional si existe
+      list.push({ id: e.id || `immuno_${j}_${week}`, title: e.titulo || 'Inmunoterapia', week, descr: e.descripcion || '', drugs: [], kind: 'inmunoterapia', cond: e.cond || null });
     }
 
     // Mantenimiento (si está definido en planes o en mantenimiento)
@@ -118,7 +142,7 @@ export default function ProtocolCycleCalendar({ data, selectedStratId }) {
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12, position: 'relative' }}>
       {/* Sticky subheader with legend */}
       <div style={{ position: 'sticky', top: 0, zIndex: 2, gridColumn: '1 / -1', background: 'linear-gradient(0deg, rgba(255,255,255,0.9), #fff)', padding: '6px 4px', borderBottom: '1px solid #e3ebfa', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ fontSize: 12, color: '#4a5970' }}>Calendario de ciclos (incluye inducción, consolidación e inmunoterapia) — clic en “Sx” para centrar el foco</span>
+        <span style={{ fontSize: 12, color: '#4a5970' }}>Calendario de ciclos (incluye inducción, consolidación, inmunoterapia y mantenimiento) — clic en “Sx” para centrar el foco</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} aria-label="Filtros de tipo de ciclo">
           <button onClick={() => setShowInd(v => !v)} aria-pressed={showInd} title="Mostrar/ocultar Inducción" style={{ fontSize: 11, border: '1px solid #cfe0ff', background: showInd ? '#eaf3ff' : '#f6f8fc', color: '#2d4b7b', borderRadius: 999, padding: '2px 8px' }}>Inducción</button>
           <button onClick={() => setShowCons(v => !v)} aria-pressed={showCons} title="Mostrar/ocultar Consolidación" style={{ fontSize: 11, border: '1px solid #ffe0bd', background: showCons ? '#fff3e6' : '#fef9f0', color: '#7a4f19', borderRadius: 999, padding: '2px 8px' }}>Consolidación</button>
@@ -136,6 +160,8 @@ export default function ProtocolCycleCalendar({ data, selectedStratId }) {
             {c.kind === 'induccion' && <span style={{ fontSize: 11, color: '#2d4b7b', background: '#eaf3ff', border: '1px solid #cfe0ff', padding: '2px 6px', borderRadius: 999 }}>Inducción</span>}
             {c.kind === 'consolidacion' && <span style={{ fontSize: 11, color: '#7a4f19', background: '#fff3e6', border: '1px solid #ffe0bd', padding: '2px 6px', borderRadius: 999, marginLeft: 6 }}>Consolidación</span>}
             {c.kind === 'inmunoterapia' && <span style={{ fontSize: 11, color: '#1a6a55', background: '#e8fff6', border: '1px solid #c6f3e2', padding: '2px 6px', borderRadius: 999, marginLeft: 6 }}>Inmunoterapia</span>}
+            {c.kind === 'mantenimiento' && <span style={{ fontSize: 11, color: '#1a6a55', background: '#e8fff6', border: '1px solid #c6f3e2', padding: '2px 6px', borderRadius: 999, marginLeft: 6 }}>Mantenimiento</span>}
+            {c.cond && <span title={c.cond} style={{ fontSize: 11, color: '#7c3aed', background: '#f4e8ff', border: '1px solid #e1caff', padding: '2px 6px', borderRadius: 999, marginLeft: 6 }}>Condicional</span>}
           </div>
           {c.descr && <p style={{ margin: '6px 0 8px', color: '#4a5970', fontSize: 13 }}>{c.descr}</p>}
           {c.drugs.length > 0 && (

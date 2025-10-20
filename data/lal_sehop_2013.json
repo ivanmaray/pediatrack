@@ -1,0 +1,158 @@
+{
+  "id": "lal_sehop_2013",
+  "titulo": "LAL SEHOP/PETHEMA 2013",
+  "grupo": "SEHOP · PETHEMA",
+  "area": "Leucemia linfoblástica aguda (pediatría)",
+  "digest": {
+    "resumen": "Protocolo pediátrico nacional (2013) para LAL B y T con estratificación dinámica por respuesta precoz (cortico-sensibilidad) y MRD (D15/D33), citogenética de alto riesgo y respuesta a bloques. Estructura clásica: pre‑fase de prednisona → Inducción (IA±IB) → Consolidación / Re‑inducción → Mantenimiento (hasta 24 meses SR/IR). Trasplante según AR/VHR (genética/MRD).",
+    "cards": [
+      { "title": "Estratificación", "content": "SR/IR/AR con ramas específicas T‑ALL y genética adversa (p.ej., t(9;22), t(4;11)). MRD D15/D33 guía intensificación." },
+      { "title": "Fases", "content": "Pre‑fase corticoide, Inducción IA±IB, Consolidación y Re‑inducción por bloques, Mantenimiento prolongado (vincristina/prednisona + 6‑MP/MTX)." },
+      { "title": "Evaluaciones clave", "content": "Hito diagnóstico, D8, D15, D33 (MRD), post‑consolidación y fin de tratamiento." }
+    ]
+  },
+  "fuentes": ["/data/fuentes/LAL_SEHOP_PETHEMA_2013.pdf"],
+  "versiones": [
+    {
+      "id": "v2013",
+      "nombre": "Versión 2013 (base)",
+      "estratificacion": [
+        { "id": "sr", "label": "Riesgo estándar (SR)", "default": true, "descripcion": "Asignación final típica: MRD baja en D15/D33, sin genética adversa, buena respuesta a corticoides." },
+        { "id": "ir", "label": "Riesgo intermedio (IR)", "descripcion": "MRD intermedia o factores clínicos sin criterios de AR; seguimiento de MRD guía mantener o intensificar." },
+        { "id": "ar", "label": "Alto riesgo (AR)", "descripcion": "Genética adversa (p. ej., Ph+, KMT2A), mala respuesta precoz o MRD elevada tras inducción; valorar TKI/TPH." },
+  { "id": "t", "label": "T‑ALL", "descripcion": "Ajustes en IB/IT y posible manejo diferenciado de MRD/TPH en T‑ALL." }
+      ],
+      "ramas_y_asignacion": {
+        "nota": "La asignación de riesgo es dinámica en las primeras semanas (pre‑fase → inducción); puede cambiar con D8/D15/D33 y citogenética. Tras la consolidación, la rama suele quedar fijada.",
+        "pasos": [
+          {
+            "momento": "D8",
+            "criterios": [
+              "Buena respuesta a corticoides → mantener SR/IR provisional",
+              "Mala respuesta a corticoides → considerar AR"
+            ]
+          },
+          {
+            "momento": "D15",
+            "criterios": [
+              "MRD baja → mantener rama provisional",
+              "MRD elevada → subir a IR/AR según umbral local"
+            ]
+          },
+          {
+            "momento": "D33 (fin inducción)",
+            "criterios": [
+              "MRD indetectable/baja → SR/IR",
+              "MRD intermedia → IR",
+              "MRD alta/persistente → AR y valorar TPH"
+            ]
+          },
+          {
+            "momento": "Genética/molecular",
+            "criterios": [
+              "Ph+ (BCR‑ABL1) → añadir TKI y considerar TPH",
+              "KMT2A‑reordenado, hipodiploidía u otros adversos → AR"
+            ]
+          }
+        ]
+      },
+      "evaluacion": [
+        { "id": "ini", "momento": "inicial", "descripcion": "Estudio diagnóstico completo (hemograma, bioquímica, coagulación, inmunofenotipo, citogenética/molecular, punción lumbar/medular si procede).", "when": { "anchor": "treatment_start" } },
+        { "id": "d8", "momento": "D8", "descripcion": "Respuesta precoz a corticoides / blastos en sangre periférica.", "when": { "anchor": "absolute_week", "week": 1 } },
+        { "id": "d15", "momento": "D15", "descripcion": "Medición de MRD (biología molecular / citometría).", "when": { "anchor": "absolute_week", "week": 2 } },
+        { "id": "d33", "momento": "D33 (fin inducción)", "descripcion": "Evaluación post‑inducción con MRD y morfología medular.", "when": { "anchor": "absolute_week", "week": 5 } },
+        { "id": "postcons", "momento": "post‑consolidación", "descripcion": "Evaluación tras bloques de consolidación/re‑inducción y decisión de mantenimiento/TPH según MRD.", "when": { "anchor": "absolute_week", "week": 16 } },
+        { "id": "end", "momento": "final", "descripcion": "Fin de tratamiento y entrada en seguimiento.", "when": { "anchor": "absolute_week", "week": 104 } }
+      ],
+      "quimioterapia": {
+        "induccion_intervalo_semanas": 1,
+        "induccion": [
+          {
+            "id": "prefase",
+            "titulo": "Pre‑fase corticoide (7 días)",
+            "when": { "anchor": "absolute_week", "week": 0 },
+            "drogas": [
+              { "nombre": "Prednisona", "dosis": "d1‑7" }
+            ],
+            "descripcion": "Evaluar cortico‑sensibilidad al D8."
+          },
+          {
+            "id": "ia",
+            "titulo": "Inducción IA",
+            "when": { "anchor": "absolute_week", "week": 1 },
+            "drogas": [
+              { "nombre": "Vincristina" },
+              { "nombre": "Antraciclina" },
+              { "nombre": "L‑Asparaginasa" },
+              { "nombre": "Corticoide" },
+              { "nombre": "IT (triple)" }
+            ]
+          },
+          {
+            "id": "ib",
+            "titulo": "Inducción IB",
+            "when": { "anchor": "absolute_week", "week": 4 },
+            "drogas": [
+              { "nombre": "Ciclofosfamida" },
+              { "nombre": "Citarabina" },
+              { "nombre": "6‑MP" },
+              { "nombre": "IT" }
+            ]
+          }
+        ],
+        "consolidacion": [
+          { "id": "cons1", "titulo": "Consolidación/Intermedio 1", "when": { "anchor": "absolute_week", "week": 6 }, "descripcion": "Bloques con MTX/6‑MP o alta dosis Ara‑C según estrato." },
+          { "id": "cons2", "titulo": "Re‑inducción", "when": { "anchor": "absolute_week", "week": 10 }, "descripcion": "Bloques tipo VCR/DEXA/Asparaginasa + antraciclina." }
+        ],
+        "mantenimiento_intervalo_semanas": 4,
+        "inicio_relativo": { "anchor": "absolute_week", "week": 24 },
+        "planes": {
+          "sr": { "orden": ["M","M","M","M","M","M","M","M","M","M","M","M"], "intervalo_semanas": 4, "nota": "Mantenimiento hasta ~24 meses si clínicamente adecuado." },
+          "ir": { "orden": ["M","M","M","M","M","M","M","M","M","M","M","M"], "intervalo_semanas": 4, "nota": "Duración similar a SR, con ajustes por MRD/toxicidad." },
+          "ar": { "orden": ["M","M","M","M","M","M"], "intervalo_semanas": 4, "nota": "Puede acortarse o sustituirse por TPH según criterios AR/VHR." }
+        }
+      },
+      "mantenimiento": {
+        "orden": ["M"],
+        "ciclos": {
+          "M": {
+            "farmacos": [
+              "6‑Mercaptopurina diaria",
+              "Metotrexato semanal (oral/IT según calendario)",
+              "Vincristina + Prednisona pulsos mensuales"
+            ],
+            "descripcion": "Mantenimiento mensual repetido; duración típicamente hasta 24 meses en SR/IR. Ajuste por recuentos y hepatotoxicidad."
+          }
+        }
+      },
+      "inmunoterapia": {
+        "descripcion": "Terapias dirigidas/biológicas según genética.",
+        "eventos": [
+          { "titulo": "TKI (Ph+)", "when": { "anchor": "absolute_week", "week": 6 }, "descripcion": "Añadir TKI concomitante (imatinib/dasatinib) desde consolidación; continuar durante consolidación/mantenimiento según protocolo local.", "cond": "Ph+ (BCR‑ABL1)" }
+        ]
+      },
+      "trasplante": {
+        "descripcion": "TPH alogénico a considerar en AR/VHR o MRD elevada/persistente tras inducción/consolidación, especialmente con genética adversa.",
+        "eventos": [
+          { "titulo": "Valoración TPH (post‑inducción)", "when": { "anchor": "absolute_week", "week": 8 }, "cond": "AR o MRD alta en D33" },
+          { "titulo": "Listar para TPH (post‑bloques)", "when": { "anchor": "absolute_week", "week": 16 }, "cond": "MRD persistente o genética adversa" }
+        ]
+      },
+      "soporte": {
+        "descripcion": "Profilaxis y soporte estándar LAL: IT según riesgo, profilaxis SNC, profilaxis infecciosa, medidas de síndrome de lisis tumoral.",
+        "items": [
+          { "titulo": "Profilaxis SNC", "descripcion": "Punciones lumbares con IT según calendario y estrato." },
+          { "titulo": "Profilaxis infecciosa", "descripcion": "TMP‑SMX 2‑3 d/sem; antifúngica según riesgo; inmunoglobulinas si hipogammaglobulinemia." },
+          { "titulo": "Síndrome de lisis tumoral", "descripcion": "Hiperhidratación, alopurinol/rasburicasa, monitorización electrolitos." }
+        ]
+      },
+      "seguimiento": {
+        "descripcion": "Seguimiento tras fin de tratamiento con monitorización hematológica, metabólica y neurocognitiva.",
+        "eventos": [
+          { "titulo": "Revisión trimestral año 1", "when": { "anchor": "absolute_week", "week": 108 } },
+          { "titulo": "Revisión semestral años 2‑3", "when": { "anchor": "absolute_week", "week": 134 } }
+        ]
+      }
+    }
+  ]
+}

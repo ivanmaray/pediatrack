@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Toasts, pushToast } from './Toasts';
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import ProtocolPreviewModal from './ProtocolPreviewModal';
 
 async function loadProtocol(id) {
   const res = await fetch(`/api/protocolo/${id}`);
@@ -372,6 +374,87 @@ export default function HomeClient({ initialData, onlySearch = false }) {
 
   const isFiltering = Boolean(q || activeArea || activeDomain !== "todos");
 
+  // Refs for card DOM nodes to export as image/pdf
+  const cardNodes = useRef(new Map());
+  const [previewProtocol, setPreviewProtocol] = useState(null);
+
+  const openProtocolViewer = (id) => {
+    try {
+      logEvent('open_protocol', { id });
+      router.push(`/protocolo/${id}`);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const copyShareableLink = async (id, opts = {}) => {
+    try {
+      const url = new URL(window.location.origin + `/protocolo/${id}`);
+      if (opts.estrato) url.searchParams.set('estrato', opts.estrato);
+      // include a simple timestamp to make links shareable with state
+      url.searchParams.set('sharedAt', String(Date.now()));
+      await navigator.clipboard.writeText(String(url));
+      logEvent('copy_link', { id, estrato: opts.estrato || null });
+      // lightweight feedback
+      pushToast('Enlace copiado al portapapeles');
+    } catch (err) {
+      console.error('copy link failed', err);
+      pushToast('Copiar enlace: abra el protocolo y comparta la URL.', 'error');
+    }
+  };
+
+  const exportCardAsPNG = async (id) => {
+    const node = cardNodes.current.get(id);
+  if (!node) return pushToast('No se encontró la tarjeta para exportar. Abre el protocolo primero.', 'error');
+    try {
+      const htmlToImage = await import('html-to-image');
+      const dataUrl = await htmlToImage.toPng(node, { backgroundColor: '#ffffff' });
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `${id}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      logEvent('export_png', { id });
+    } catch (err) {
+      console.error('export png failed', err);
+      pushToast('No se pudo exportar a PNG.', 'error');
+    }
+  };
+
+  const exportCardAsPDF = async (id) => {
+  const node = cardNodes.current.get(id);
+  if (!node) return pushToast('No se encontró la tarjeta para exportar. Abre el protocolo primero.', 'error');
+    try {
+      const htmlToImage = await import('html-to-image');
+      const jsPDF = (await import('jspdf')).jsPDF;
+      const dataUrl = await htmlToImage.toPng(node, { backgroundColor: '#ffffff' });
+      const img = new Image();
+      img.src = dataUrl;
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      // scale image to fit width with margin
+      const margin = 20;
+      const ratio = Math.min((pageWidth - margin * 2) / img.width, (pageHeight - margin * 2) / img.height);
+      const w = img.width * ratio;
+      const h = img.height * ratio;
+      pdf.addImage(dataUrl, 'PNG', (pageWidth - w) / 2, (pageHeight - h) / 2, w, h);
+      pdf.save(`${id}.pdf`);
+      logEvent('export_pdf', { id });
+    } catch (err) {
+      console.error('export pdf failed', err);
+      pushToast('No se pudo exportar a PDF.', 'error');
+    }
+  };
+
+  const openPreview = (protocolo) => {
+    setPreviewProtocol(protocolo);
+  };
+
+  const closePreview = () => setPreviewProtocol(null);
+
   // Desplazar vista al bloque de resultados cuando cambian filtros o búsqueda
   const prevFiltersRef = useRef({ q: "", area: "", domain: "todos" });
   useEffect(() => {
@@ -440,6 +523,7 @@ export default function HomeClient({ initialData, onlySearch = false }) {
 
   return (
     <main className="container page-shell">
+      <Toasts />
       <div className="home">
         {!onlySearch && (
           <>
@@ -448,28 +532,28 @@ export default function HomeClient({ initialData, onlySearch = false }) {
                 <img src="/pediatrack-mark.svg" alt="" width="40" height="40" aria-hidden="true" />
                 <span className="eyebrow">Oncología y Hematología pediátricas</span>
               </div>
-              <h1 id="hero-title">Mapas terapéuticos, precisos y accionables</h1>
-              <p className="hero__lead">Explora protocolos onco-hematológicos por patología. Visualiza fases y ciclos con tiempos y dosis, listos para la práctica clínica y los comités.</p>
+              <h1 id="hero-title">Mapas terapéuticos clínicos — precisos y accionables</h1>
+              <p className="hero__lead">Explora protocolos onco-hematológicos organizados por patología. Consulta fases, ciclos, tiempos y dosis en un formato diseñado para uso clínico y discusión en comités.</p>
               <ul className="hero__bullets" aria-label="Ventajas clave">
-                <li>Inducción, consolidación, RT e inmuno</li>
-                <li>Exportación a PNG/PDF</li>
-                <li>Enlaces compartibles con estado</li>
+                <li>Inducción, consolidación, radioterapia e inmunoterapia</li>
+                <li>Exportación profesional a PNG/PDF para informes</li>
+                <li>Enlaces compartibles que reproducen la vista y contexto</li>
               </ul>
               <div className="quick-links" aria-label="Incluye">
-                <span className="chip" aria-hidden="true">Incluye:</span>
-                <span className="chip">Evaluaciones</span>
-                <span className="chip">Quimioterapia</span>
+                <strong className="hero__list-label">Incluye</strong>
+                <span className="chip">Evaluaciones programadas</span>
+                <span className="chip">Quimioterapia (esquemas y dosis)</span>
                 <span className="chip">Inmunoterapia</span>
-                <span className="chip">Radioterapia</span>
-                <span className="chip">Trasplante (TPH)</span>
-                <span className="chip">Seguimiento</span>
+                <span className="chip">Radioterapia (planificación y QA)</span>
+                <span className="chip">Trasplante hematopoyético (TPH)</span>
+                <span className="chip">Seguimiento y controles</span>
               </div>
             </section>
 
             <section aria-labelledby="oncop-title">
               <header style={{textAlign: 'center', marginBottom: 12}}>
                 <h2 id="oncop-title" style={{margin: 0}}>Elige una patología onco-hematológica</h2>
-                <p className="hero__lead" style={{marginTop: 4}}>Haz clic en un diagnóstico para ver los protocolos disponibles.</p>
+                <p className="hero__lead" style={{marginTop: 4}}>Seleccione un diagnóstico para ver los protocolos disponibles y sus versiones clínicas.</p>
               </header>
               {DOMAIN_ORDER.map((domainKey) => {
                 const title = DIAG_GROUPS[domainKey]?.label || (domainKey === 'hemato' ? 'Hematología oncológica' : domainKey === 'solid' ? 'Tumores sólidos pediátricos' : 'Protocolos transversales y soporte');
@@ -501,7 +585,16 @@ export default function HomeClient({ initialData, onlySearch = false }) {
                     </button>
                     {expanded && (
                       <div style={{ marginTop: 8 }}>
-                        <Grid protocolos={byArea.get(area) || []} highlight={(x)=>x} query={""} />
+                        <Grid
+                          protocolos={byArea.get(area) || []}
+                          highlight={(x) => x}
+                          query={""}
+                          cardNodes={cardNodes}
+                          onOpen={openProtocolViewer}
+                          onExportPNG={exportCardAsPNG}
+                          onExportPDF={exportCardAsPDF}
+                          onCopyLink={copyShareableLink}
+                        />
                       </div>
                     )}
                   </li>
@@ -631,10 +724,10 @@ export default function HomeClient({ initialData, onlySearch = false }) {
                       ref={searchRef}
                       value={q}
                       onChange={(e) => setQ(e.target.value)}
-                      placeholder="Ej: neuroblastoma, meduloblastoma, ALL, Hodgkin…"
+                      placeholder="Ej.: neuroblastoma, meduloblastoma, ALL, Hodgkin"
                       aria-label="Buscar protocolos por nombre o código"
                       autoFocus
-                      title="Busca por protocolos específicos, patologías o códigos. Presiona / para buscar"
+                      title="Buscar protocolos: escribe nombre, área o código. Presiona / para focalizar"
                       list="search-suggestions"
                     />
                     <datalist id="search-suggestions">
@@ -760,24 +853,24 @@ export default function HomeClient({ initialData, onlySearch = false }) {
                protocolos.length ? (
                  <Grid protocolos={protocolos} highlight={highlight} query={dq} />
                ) : (
-                 <div className="empty-state" role="status" aria-live="polite">
-                   <h3>No encontramos resultados.</h3>
-                   <p>Prueba a:</p>
-                   <ul>
-                     <li>Buscar por patología ("neuroblastoma", "meduloblastoma", "Hodgkin").</li>
-                     <li>Limpiar filtros o cambiar de categoría.</li>
-                     <li>Usar siglas: HRNBL, PNET5, LLA.</li>
-                   </ul>
-                   <div className="quick-examples">
-                     <span>Ejemplos rápidos:</span>
-                     <div className="quick-picker__chips">
-                       <button type="button" className="chip" onClick={() => setQ('neuroblastoma')}>neuroblastoma</button>
-                       <button type="button" className="chip" onClick={() => setQ('meduloblastoma')}>meduloblastoma</button>
-                       <button type="button" className="chip" onClick={() => setQ('Hodgkin')}>Hodgkin</button>
-                       <button type="button" className="chip" onClick={() => setQ('PNET5')}>PNET5</button>
-                     </div>
-                   </div>
-                 </div>
+                  <div className="empty-state" role="status" aria-live="polite">
+                    <h3>No se encontraron protocolos.</h3>
+                    <p>Pruebe lo siguiente:</p>
+                    <ul>
+                      <li>Buscar por patología (por ejemplo: "neuroblastoma", "meduloblastoma").</li>
+                      <li>Limpiar filtros o seleccionar otra categoría.</li>
+                      <li>Probar siglas o códigos: PNET5, HRNBL, LLA.</li>
+                    </ul>
+                    <div className="quick-examples">
+                      <span>Ejemplos rápidos:</span>
+                      <div className="quick-picker__chips">
+                        <button type="button" className="chip" onClick={() => setQ('neuroblastoma')}>neuroblastoma</button>
+                        <button type="button" className="chip" onClick={() => setQ('meduloblastoma')}>meduloblastoma</button>
+                        <button type="button" className="chip" onClick={() => setQ('Hodgkin')}>Hodgkin</button>
+                        <button type="button" className="chip" onClick={() => setQ('PNET5')}>PNET5</button>
+                      </div>
+                    </div>
+                  </div>
                )
              ) : (
                <div className="empty-state" role="note">
@@ -827,29 +920,29 @@ export default function HomeClient({ initialData, onlySearch = false }) {
             © {new Date().getFullYear()} Pediatrack. Uso demostrativo; no sustituye documentos oficiales.
           </footer>
         )}
+        {previewProtocol && (
+          <ProtocolPreviewModal
+            protocolo={previewProtocol}
+            onClose={closePreview}
+            onOpen={(id) => { openProtocolViewer(id); }}
+            onExportPNG={exportCardAsPNG}
+            onExportPDF={exportCardAsPDF}
+            onCopyLink={copyShareableLink}
+          />
+        )}
       </div>
     </main>
   );
 }
 
-function Grid({ protocolos, highlight, query }) {
+function Grid({ protocolos, highlight, query, cardNodes, onOpen, onExportPNG, onExportPDF, onCopyLink }) {
   return (
     <ul className="protocol-grid">
       {protocolos.map((p) => (
         <li key={p.id}>
-          <Link
-            href={`/protocolo/${p.id}`}
-            className="protocol-card"
-            aria-label={`Ver protocolo ${p.titulo || p.nombre || p.id}`}
-            onClick={() => {
-              try {
-                const key = 'pt.telemetry';
-                const arr = JSON.parse(localStorage.getItem(key) || '[]');
-                arr.push({ t: Date.now(), type: 'open_protocol', id: p.id });
-                localStorage.setItem(key, JSON.stringify(arr.slice(-200)));
-              } catch {}
-            }}
-          >
+          <div className="protocol-card" role="group" aria-label={`Protocolo ${p.titulo || p.nombre || p.id}`} ref={(el) => {
+              try { if (el) cardNodes.current.set(p.id, el); else cardNodes.current.delete(p.id); } catch {}
+            }} style={{ position: 'relative' }}>
             <div className="protocol-card__meta">
               <span>{highlight(p.area || DEFAULT_AREA, query)}</span>
               {p.grupo && <span>· {highlight(p.grupo, query)}</span>}
@@ -857,19 +950,29 @@ function Grid({ protocolos, highlight, query }) {
             <p className="protocol-card__title">{highlight(p.titulo || p.nombre || p.id, query)}</p>
             <div className="tag-row">
               <span className="badge">
-                <img
-                  className="badge__logo"
-                  src="/pediatrack-mark.svg"
-                  alt=""
-                  width="14"
-                  height="14"
-                  aria-hidden="true"
-                />
+                <img className="badge__logo" src="/pediatrack-mark.svg" alt="" width="14" height="14" aria-hidden="true" />
                 <span>ID {p.id}</span>
               </span>
               {p.nombre && <span className="badge badge--secondary">{p.nombre}</span>}
             </div>
-          </Link>
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className="btn btn--small" onClick={() => onPreview?.(p)}>Vista previa</button>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Link href={`/protocolo/${p.id}`} onClick={() => { try { const key = 'pt.telemetry'; const arr = JSON.parse(localStorage.getItem(key) || '[]'); arr.push({ t: Date.now(), type: 'open_protocol', id: p.id }); localStorage.setItem(key, JSON.stringify(arr.slice(-200))); } catch {} }} className="btn btn--ghost btn--small">Ver protocolo</Link>
+              </div>
+            </div>
+
+            <div className="protocol-card__badges" style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+              {p.versiones && p.versiones.some(v => v.quimioterapia) && <span className="badge">Quimio</span>}
+              {p.versiones && p.versiones.some(v => v.radioterapia) && <span className="badge">RT</span>}
+              {p.versiones && p.versiones.some(v => v.inmunoterapia) && <span className="badge">Inmuno</span>}
+              {p.versiones && p.versiones.some(v => v.trasplante) && <span className="badge">TPH</span>}
+              {p.versiones && p.versiones.some(v => v.mantenimiento) && <span className="badge badge--secondary">Mto</span>}
+            </div>
+          </div>
         </li>
       ))}
     </ul>
